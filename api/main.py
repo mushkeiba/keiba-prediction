@@ -177,7 +177,38 @@ class NARScraper:
             return df
         except Exception as e:
             print(f'Error: {e}')
-            return None
+
+    def get_odds(self, race_id: str) -> dict:
+        """単勝オッズを取得"""
+        url = f"{self.BASE_URL}/odds/odds_get_form.html?race_id={race_id}&type=b1"
+        try:
+            soup = self._fetch(url, encoding='UTF-8')
+            odds_dict = {}
+
+            # オッズテーブルから取得
+            for tr in soup.find_all('tr'):
+                tds = tr.find_all('td')
+                if len(tds) >= 2:
+                    # 馬番を探す
+                    umaban = None
+                    odds_val = None
+
+                    for td in tds:
+                        text = td.get_text(strip=True)
+                        # 馬番（1-18の数字）
+                        if text.isdigit() and 1 <= int(text) <= 18 and umaban is None:
+                            umaban = int(text)
+                        # オッズ（小数点を含む数字）
+                        if re.match(r'^\d+\.\d+$', text):
+                            odds_val = float(text)
+
+                    if umaban and odds_val:
+                        odds_dict[umaban] = odds_val
+
+            return odds_dict
+        except Exception as e:
+            print(f'Odds error: {e}')
+            return {}
 
     def get_horse_history(self, horse_id: str):
         if horse_id in self.horse_cache:
@@ -449,6 +480,9 @@ def predict(request: PredictRequest):
         df = scraper.enrich_data(df)
         df = processor.process(df)
 
+        # オッズ取得
+        odds_dict = scraper.get_odds(rid)
+
         # 予測
         X = df[model_features].fillna(-1)
         df['prob'] = model.predict(X)
@@ -463,14 +497,26 @@ def predict(request: PredictRequest):
 
         predictions = []
         for i, (_, row) in enumerate(df.head(3).iterrows()):
+            horse_num = int(row['horse_number']) if pd.notna(row.get('horse_number')) else 0
+            odds = odds_dict.get(horse_num, 0)
+            prob = float(row['prob'])
+
+            # 妙味計算: 予測確率 × オッズ > 1 なら妙味あり
+            # 例: 予測30% × オッズ5.0 = 1.5 → 期待値プラス
+            expected_value = prob * odds if odds > 0 else 0
+            is_value = expected_value > 1.0  # 期待値1以上なら妙味あり
+
             predictions.append({
                 "rank": i + 1,
-                "number": int(row['horse_number']) if pd.notna(row.get('horse_number')) else 0,
+                "number": horse_num,
                 "name": row.get('horse_name', '不明'),
                 "jockey": row.get('jockey_name', '不明'),
-                "prob": round(float(row['prob']), 3),
+                "prob": round(prob, 3),
                 "win_rate": round(float(row.get('horse_win_rate', 0)) * 100, 1),
-                "show_rate": round(float(row.get('horse_show_rate', 0)) * 100, 1)
+                "show_rate": round(float(row.get('horse_show_rate', 0)) * 100, 1),
+                "odds": odds,
+                "expected_value": round(expected_value, 2),
+                "is_value": is_value
             })
 
         results.append({
