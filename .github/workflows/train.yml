@@ -1,18 +1,21 @@
 name: Train Models
 
 on:
-  # 曜日ごとに異なる競馬場を学習
+  # 毎日1競馬場ずつ再学習（2週間で全14場）
   schedule:
-    - cron: '0 21 * * 0'  # 日曜 → 月曜朝6時(JST): 南関東
-    - cron: '0 21 * * 1'  # 月曜 → 火曜朝6時(JST): 北日本
-    - cron: '0 21 * * 2'  # 火曜 → 水曜朝6時(JST): 中部
-    - cron: '0 21 * * 3'  # 水曜 → 木曜朝6時(JST): 西日本
+    - cron: '0 21 * * 0'  # 日曜 → 月曜朝6時(JST): 大井
+    - cron: '0 21 * * 1'  # 月曜 → 火曜朝6時(JST): 川崎
+    - cron: '0 21 * * 2'  # 火曜 → 水曜朝6時(JST): 船橋
+    - cron: '0 21 * * 3'  # 水曜 → 木曜朝6時(JST): 浦和
+    - cron: '0 21 * * 4'  # 木曜 → 金曜朝6時(JST): 門別
+    - cron: '0 21 * * 5'  # 金曜 → 土曜朝6時(JST): 盛岡
+    - cron: '0 21 * * 6'  # 土曜 → 日曜朝6時(JST): 水沢
 
-  # 手動実行（競馬場を1つ選択）
+  # 手動実行
   workflow_dispatch:
     inputs:
       track:
-        description: '学習する競馬場'
+        description: '競馬場'
         required: true
         type: choice
         options:
@@ -30,11 +33,19 @@ on:
           - 姫路
           - 高知
           - 佐賀
+      mode:
+        description: 'モード'
+        required: true
+        type: choice
+        options:
+          - init
+          - update
+        default: 'update'
 
 jobs:
   train:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 180  # 初回は長めに
 
     steps:
       - name: Checkout
@@ -49,35 +60,41 @@ jobs:
         run: |
           pip install pandas numpy scikit-learn lightgbm beautifulsoup4 lxml requests
 
-      - name: Determine tracks to train
-        id: tracks
+      - name: Determine track and mode
+        id: config
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            # 手動実行: 選択された競馬場のみ
-            echo "tracks=${{ github.event.inputs.track }}" >> $GITHUB_OUTPUT
+            # 手動実行
+            echo "track=${{ github.event.inputs.track }}" >> $GITHUB_OUTPUT
+            echo "mode=${{ github.event.inputs.mode }}" >> $GITHUB_OUTPUT
           else
-            # スケジュール実行: 曜日で分岐
+            # スケジュール実行: 曜日で競馬場を決定（再学習モード）
             DAY_OF_WEEK=$(date -u +%u)
             case $DAY_OF_WEEK in
-              1) echo "tracks=大井,川崎,船橋,浦和" >> $GITHUB_OUTPUT ;;  # 月曜: 南関東
-              2) echo "tracks=門別,盛岡,水沢" >> $GITHUB_OUTPUT ;;       # 火曜: 北日本
-              3) echo "tracks=金沢,笠松,名古屋" >> $GITHUB_OUTPUT ;;     # 水曜: 中部
-              4) echo "tracks=園田,姫路,高知,佐賀" >> $GITHUB_OUTPUT ;;  # 木曜: 西日本
-              *) echo "tracks=" >> $GITHUB_OUTPUT ;;
+              1) TRACK="大井" ;;
+              2) TRACK="川崎" ;;
+              3) TRACK="船橋" ;;
+              4) TRACK="浦和" ;;
+              5) TRACK="門別" ;;
+              6) TRACK="盛岡" ;;
+              7) TRACK="水沢" ;;
+              *) TRACK="" ;;
             esac
+            echo "track=$TRACK" >> $GITHUB_OUTPUT
+            echo "mode=update" >> $GITHUB_OUTPUT
           fi
 
-      - name: Train models
-        if: steps.tracks.outputs.tracks != ''
+      - name: Train model
+        if: steps.config.outputs.track != ''
         run: |
-          echo "Training: ${{ steps.tracks.outputs.tracks }}"
-          python train.py "${{ steps.tracks.outputs.tracks }}"
+          echo "🏇 Training: ${{ steps.config.outputs.track }} (${{ steps.config.outputs.mode }})"
+          python train.py "${{ steps.config.outputs.track }}" "${{ steps.config.outputs.mode }}"
 
       - name: Commit and push
-        if: steps.tracks.outputs.tracks != ''
+        if: steps.config.outputs.track != ''
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add models/*.pkl
-          git diff --staged --quiet || git commit -m "🤖 モデル更新: ${{ steps.tracks.outputs.tracks }} $(date +'%Y-%m-%d')"
+          git add models/*.pkl data/*.csv
+          git diff --staged --quiet || git commit -m "🤖 ${{ steps.config.outputs.mode }}: ${{ steps.config.outputs.track }} $(date +'%Y-%m-%d')"
           git push

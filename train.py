@@ -1,6 +1,17 @@
 """
 地方競馬モデル学習スクリプト
 GitHub Actionsから自動実行される
+
+使い方:
+  python train.py <競馬場名> <モード>
+
+  モード:
+    init   - 初回モデル作成（365日分取得）
+    update - モデル再学習（差分のみ取得）
+
+  例:
+    python train.py 大井 init    # 初回: 365日分取得してモデル作成
+    python train.py 大井 update  # 再学習: 差分のみ取得して再学習
 """
 
 import os
@@ -9,6 +20,7 @@ import time
 import re
 import pickle
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import requests
 from bs4 import BeautifulSoup
@@ -20,23 +32,23 @@ import lightgbm as lgb
 
 # ========== 設定 ==========
 TRACKS = {
-    "大井": {"code": "44", "model": "models/model_ohi.pkl"},
-    "川崎": {"code": "45", "model": "models/model_kawasaki.pkl"},
-    "船橋": {"code": "43", "model": "models/model_funabashi.pkl"},
-    "浦和": {"code": "42", "model": "models/model_urawa.pkl"},
-    "門別": {"code": "30", "model": "models/model_monbetsu.pkl"},
-    "盛岡": {"code": "35", "model": "models/model_morioka.pkl"},
-    "水沢": {"code": "36", "model": "models/model_mizusawa.pkl"},
-    "金沢": {"code": "46", "model": "models/model_kanazawa.pkl"},
-    "笠松": {"code": "47", "model": "models/model_kasamatsu.pkl"},
-    "名古屋": {"code": "48", "model": "models/model_nagoya.pkl"},
-    "園田": {"code": "50", "model": "models/model_sonoda.pkl"},
-    "姫路": {"code": "51", "model": "models/model_himeji.pkl"},
-    "高知": {"code": "54", "model": "models/model_kochi.pkl"},
-    "佐賀": {"code": "55", "model": "models/model_saga.pkl"},
+    "大井": {"code": "44", "model": "models/model_ohi.pkl", "data": "data/races_ohi.csv"},
+    "川崎": {"code": "45", "model": "models/model_kawasaki.pkl", "data": "data/races_kawasaki.csv"},
+    "船橋": {"code": "43", "model": "models/model_funabashi.pkl", "data": "data/races_funabashi.csv"},
+    "浦和": {"code": "42", "model": "models/model_urawa.pkl", "data": "data/races_urawa.csv"},
+    "門別": {"code": "30", "model": "models/model_monbetsu.pkl", "data": "data/races_monbetsu.csv"},
+    "盛岡": {"code": "35", "model": "models/model_morioka.pkl", "data": "data/races_morioka.csv"},
+    "水沢": {"code": "36", "model": "models/model_mizusawa.pkl", "data": "data/races_mizusawa.csv"},
+    "金沢": {"code": "46", "model": "models/model_kanazawa.pkl", "data": "data/races_kanazawa.csv"},
+    "笠松": {"code": "47", "model": "models/model_kasamatsu.pkl", "data": "data/races_kasamatsu.csv"},
+    "名古屋": {"code": "48", "model": "models/model_nagoya.pkl", "data": "data/races_nagoya.csv"},
+    "園田": {"code": "50", "model": "models/model_sonoda.pkl", "data": "data/races_sonoda.csv"},
+    "姫路": {"code": "51", "model": "models/model_himeji.pkl", "data": "data/races_himeji.csv"},
+    "高知": {"code": "54", "model": "models/model_kochi.pkl", "data": "data/races_kochi.csv"},
+    "佐賀": {"code": "55", "model": "models/model_saga.pkl", "data": "data/races_saga.csv"},
 }
 
-DAYS = 180  # 取得日数
+INIT_DAYS = 365  # 初回取得日数
 DELAY = 0.5  # リクエスト間隔
 
 
@@ -45,7 +57,7 @@ class NARScraper:
     BASE_URL = "https://nar.netkeiba.com"
     DB_URL = "https://db.netkeiba.com"
 
-    def __init__(self, track_code, delay=1.0):
+    def __init__(self, track_code, delay=0.5):
         self.track_code = track_code
         self.delay = delay
         self.session = requests.Session()
@@ -80,6 +92,11 @@ class NARScraper:
         try:
             soup = self._fetch(url)
             info = {'race_id': race_id}
+
+            # 日付を抽出（race_idから）
+            # race_id形式: YYYYMMJJRRNN (年月日+競馬場+レース番号)
+            if len(race_id) >= 8:
+                info['race_date'] = race_id[:8]
 
             nm = soup.find('h1', class_='RaceName')
             if nm:
@@ -344,27 +361,25 @@ def save_model(model, features, path):
         pickle.dump({'model': model, 'features': features}, f)
 
 
-# ========== メイン処理 ==========
-def train_track(track_name, track_info):
-    print(f"\n{'='*50}")
-    print(f"🏇 {track_name}競馬場")
-    print(f"{'='*50}")
+# ========== データ収集 ==========
+def collect_data(scraper, start_date, end_date, existing_race_ids=None):
+    """指定期間のデータを収集"""
+    if existing_race_ids is None:
+        existing_race_ids = set()
 
-    scraper = NARScraper(track_info['code'], delay=DELAY)
-    processor = Processor()
-
-    # データ収集
-    print(f"データ収集中（過去{DAYS}日）...")
     all_data = []
-    today = datetime.now()
+    current = start_date
+    total_days = (end_date - start_date).days
+    processed_days = 0
 
-    for i in range(1, DAYS + 1):
-        d = (today - timedelta(days=i)).strftime('%Y%m%d')
-        race_ids = scraper.get_race_list_by_date(d)
-        if not race_ids:
-            continue
+    while current <= end_date:
+        date_str = current.strftime('%Y%m%d')
+        race_ids = scraper.get_race_list_by_date(date_str)
 
-        for rid in race_ids:
+        # 新しいレースのみ処理
+        new_race_ids = [rid for rid in race_ids if rid not in existing_race_ids]
+
+        for rid in new_race_ids:
             df = scraper.get_race_data(rid)
             if df is not None and len(df) > 0:
                 try:
@@ -373,15 +388,116 @@ def train_track(track_name, track_info):
                     pass
                 all_data.append(df)
 
-        if i % 30 == 0:
-            print(f"  {i}/{DAYS}日完了 ({len(all_data)}レース)")
+        processed_days += 1
+        if processed_days % 30 == 0:
+            print(f"  {processed_days}/{total_days}日完了 ({len(all_data)}レース)")
 
-    if not all_data:
-        print(f"⚠️ {track_name}: データが見つかりません")
+        current += timedelta(days=1)
+
+    return all_data
+
+
+def get_latest_date_from_csv(csv_path):
+    """CSVから最新の日付を取得"""
+    if not Path(csv_path).exists():
+        return None
+
+    try:
+        df = pd.read_csv(csv_path)
+        if 'race_date' in df.columns and len(df) > 0:
+            latest = df['race_date'].max()
+            return datetime.strptime(str(int(latest)), '%Y%m%d')
+    except Exception as e:
+        print(f"  CSV読み込みエラー: {e}")
+    return None
+
+
+def get_existing_race_ids(csv_path):
+    """CSVから既存のレースIDを取得"""
+    if not Path(csv_path).exists():
+        return set()
+
+    try:
+        df = pd.read_csv(csv_path)
+        if 'race_id' in df.columns:
+            return set(df['race_id'].unique())
+    except:
+        pass
+    return set()
+
+
+# ========== メイン処理 ==========
+def train_track(track_name, track_info, mode='init'):
+    """
+    競馬場のモデルを学習
+
+    mode:
+        'init'   - 初回モデル作成（365日分取得）
+        'update' - モデル再学習（差分のみ取得）
+    """
+    print(f"\n{'='*50}")
+    print(f"🏇 {track_name}競馬場 - {'初回モデル作成' if mode == 'init' else 'モデル再学習'}")
+    print(f"{'='*50}")
+
+    scraper = NARScraper(track_info['code'], delay=DELAY)
+    processor = Processor()
+
+    csv_path = track_info['data']
+    model_path = track_info['model']
+
+    today = datetime.now()
+    yesterday = today - timedelta(days=1)  # 昨日まで（今日は結果未確定）
+
+    if mode == 'init':
+        # 初回: 365日分取得
+        start_date = today - timedelta(days=INIT_DAYS)
+        existing_race_ids = set()
+        print(f"データ収集中（過去{INIT_DAYS}日）...")
+    else:
+        # 再学習: 差分のみ取得
+        latest_date = get_latest_date_from_csv(csv_path)
+        if latest_date is None:
+            print(f"⚠️ CSVが存在しません。initモードで実行してください。")
+            return False
+
+        start_date = latest_date + timedelta(days=1)
+        if start_date > yesterday:
+            print(f"✅ データは最新です（最終: {latest_date.strftime('%Y-%m-%d')}）")
+            # データは最新だが、モデルは再学習する
+            start_date = None
+
+        existing_race_ids = get_existing_race_ids(csv_path)
+        if start_date:
+            print(f"差分データ収集中（{start_date.strftime('%Y-%m-%d')} 〜 {yesterday.strftime('%Y-%m-%d')}）...")
+
+    # データ収集
+    if mode == 'init' or (mode == 'update' and start_date):
+        new_data = collect_data(scraper, start_date, yesterday, existing_race_ids)
+
+        if new_data:
+            df_new = pd.concat(new_data, ignore_index=True)
+            print(f"新規データ: {len(df_new)}件")
+
+            # CSVに保存/追記
+            if mode == 'init' or not Path(csv_path).exists():
+                df_new.to_csv(csv_path, index=False)
+                print(f"✅ CSV保存: {csv_path}")
+            else:
+                df_new.to_csv(csv_path, mode='a', header=False, index=False)
+                print(f"✅ CSV追記: {csv_path}")
+        else:
+            if mode == 'init':
+                print(f"⚠️ {track_name}: データが見つかりません")
+                return False
+            print(f"新規データなし")
+
+    # CSVからデータ読み込み
+    if not Path(csv_path).exists():
+        print(f"⚠️ CSVが存在しません")
         return False
 
-    df_all = pd.concat(all_data, ignore_index=True)
-    print(f"収集完了: {len(df_all)}件")
+    df_all = pd.read_csv(csv_path)
+    print(f"総データ: {len(df_all)}件")
 
     # 前処理
     df_processed = processor.process(df_all)
@@ -397,40 +513,45 @@ def train_track(track_name, track_info):
     print(f"AUC: {auc:.4f}")
 
     # 保存
-    save_model(model, features, track_info['model'])
-    print(f"✅ 保存: {track_info['model']}")
+    save_model(model, features, model_path)
+    print(f"✅ モデル保存: {model_path}")
 
     return True
 
 
 def main():
-    # コマンドライン引数から対象競馬場を取得
-    target_tracks = []
-    if len(sys.argv) > 1 and sys.argv[1]:
-        target_tracks = [t.strip() for t in sys.argv[1].split(',')]
-        target_tracks = [t for t in target_tracks if t in TRACKS]
+    # コマンドライン引数
+    if len(sys.argv) < 2:
+        print("使い方: python train.py <競馬場名> [モード]")
+        print("モード: init (初回) / update (再学習)")
+        print("例: python train.py 大井 init")
+        sys.exit(1)
 
-    if not target_tracks:
-        target_tracks = list(TRACKS.keys())
+    track_name = sys.argv[1].strip()
+    mode = sys.argv[2].strip() if len(sys.argv) > 2 else 'update'
 
-    print(f"🚀 学習開始: {', '.join(target_tracks)}")
-    print(f"取得日数: {DAYS}日")
+    if track_name not in TRACKS:
+        print(f"❌ 不明な競馬場: {track_name}")
+        print(f"利用可能: {', '.join(TRACKS.keys())}")
+        sys.exit(1)
 
-    results = {}
-    for track_name in target_tracks:
-        try:
-            success = train_track(track_name, TRACKS[track_name])
-            results[track_name] = "✅" if success else "⚠️"
-        except Exception as e:
-            print(f"❌ {track_name}: エラー - {e}")
-            results[track_name] = "❌"
+    if mode not in ['init', 'update']:
+        print(f"❌ 不明なモード: {mode}")
+        print("利用可能: init / update")
+        sys.exit(1)
 
-    # 結果サマリー
-    print(f"\n{'='*50}")
-    print("📊 結果サマリー")
-    print(f"{'='*50}")
-    for track, status in results.items():
-        print(f"  {status} {track}")
+    print(f"🚀 学習開始: {track_name} ({mode}モード)")
+
+    try:
+        success = train_track(track_name, TRACKS[track_name], mode)
+        if success:
+            print(f"\n✅ 完了: {track_name}")
+        else:
+            print(f"\n⚠️ 失敗: {track_name}")
+            sys.exit(1)
+    except Exception as e:
+        print(f"❌ エラー: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
