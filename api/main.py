@@ -12,6 +12,10 @@ import re
 import time
 from datetime import datetime
 import os
+from pathlib import Path
+
+# プロジェクトのルートディレクトリを取得
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 app = FastAPI(
     title="地方競馬予測API",
@@ -352,8 +356,9 @@ def load_model(track_code: str):
     if model_name in MODEL_ALIASES:
         paths_to_try = MODEL_ALIASES[model_name]
 
-    for model_path in paths_to_try:
-        if os.path.exists(model_path):
+    for model_name in paths_to_try:
+        model_path = BASE_DIR / model_name
+        if model_path.exists():
             with open(model_path, 'rb') as f:
                 d = pickle.load(f)
             model_cache[track_code] = (d['model'], d['features'])
@@ -373,7 +378,12 @@ def get_tracks():
     """利用可能な競馬場一覧を取得"""
     tracks = []
     for code, info in TRACKS.items():
-        model_exists = os.path.exists(info['model'])
+        model_name = info['model']
+        # エイリアスも含めてチェック
+        paths_to_check = [model_name]
+        if model_name in MODEL_ALIASES:
+            paths_to_check = MODEL_ALIASES[model_name]
+        model_exists = any((BASE_DIR / p).exists() for p in paths_to_check)
         tracks.append({
             "code": code,
             "name": info['name'],
