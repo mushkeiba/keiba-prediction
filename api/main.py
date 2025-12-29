@@ -49,6 +49,11 @@ TRACKS = {
 # モデルキャッシュ
 model_cache = {}
 
+# 旧モデル名との互換性
+MODEL_ALIASES = {
+    "model_ohi.pkl": ["model_v2.pkl", "model_ohi.pkl"],
+}
+
 
 # ========== スクレイパー ==========
 class NARScraper:
@@ -340,12 +345,19 @@ def load_model(track_code: str):
     if track_code not in TRACKS:
         return None, None
 
-    model_path = TRACKS[track_code]['model']
-    if os.path.exists(model_path):
-        with open(model_path, 'rb') as f:
-            d = pickle.load(f)
-        model_cache[track_code] = (d['model'], d['features'])
-        return d['model'], d['features']
+    model_name = TRACKS[track_code]['model']
+
+    # エイリアスをチェック（旧モデル名との互換性）
+    paths_to_try = [model_name]
+    if model_name in MODEL_ALIASES:
+        paths_to_try = MODEL_ALIASES[model_name]
+
+    for model_path in paths_to_try:
+        if os.path.exists(model_path):
+            with open(model_path, 'rb') as f:
+                d = pickle.load(f)
+            model_cache[track_code] = (d['model'], d['features'])
+            return d['model'], d['features']
     return None, None
 
 
