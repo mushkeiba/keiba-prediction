@@ -1,22 +1,40 @@
 name: Train Models
 
 on:
-  # 毎週月曜 朝6時（日本時間）に実行
+  # 曜日ごとに異なる競馬場を学習
   schedule:
-    - cron: '0 21 * * 0'  # UTC 21:00 = JST 06:00 月曜
+    - cron: '0 21 * * 0'  # 日曜 → 月曜朝6時(JST): 南関東
+    - cron: '0 21 * * 1'  # 月曜 → 火曜朝6時(JST): 北日本
+    - cron: '0 21 * * 2'  # 火曜 → 水曜朝6時(JST): 中部
+    - cron: '0 21 * * 3'  # 水曜 → 木曜朝6時(JST): 西日本
 
-  # 手動実行も可能
+  # 手動実行（競馬場を1つ選択）
   workflow_dispatch:
     inputs:
-      tracks:
-        description: '学習する競馬場（カンマ区切り、空欄=全部）'
-        required: false
-        default: ''
+      track:
+        description: '学習する競馬場'
+        required: true
+        type: choice
+        options:
+          - 大井
+          - 川崎
+          - 船橋
+          - 浦和
+          - 門別
+          - 盛岡
+          - 水沢
+          - 金沢
+          - 笠松
+          - 名古屋
+          - 園田
+          - 姫路
+          - 高知
+          - 佐賀
 
 jobs:
   train:
     runs-on: ubuntu-latest
-    timeout-minutes: 120  # 最大2時間
+    timeout-minutes: 90
 
     steps:
       - name: Checkout
@@ -31,14 +49,35 @@ jobs:
         run: |
           pip install pandas numpy scikit-learn lightgbm beautifulsoup4 lxml requests
 
-      - name: Train models
+      - name: Determine tracks to train
+        id: tracks
         run: |
-          python train.py ${{ github.event.inputs.tracks }}
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            # 手動実行: 選択された競馬場のみ
+            echo "tracks=${{ github.event.inputs.track }}" >> $GITHUB_OUTPUT
+          else
+            # スケジュール実行: 曜日で分岐
+            DAY_OF_WEEK=$(date -u +%u)
+            case $DAY_OF_WEEK in
+              1) echo "tracks=大井,川崎,船橋,浦和" >> $GITHUB_OUTPUT ;;  # 月曜: 南関東
+              2) echo "tracks=門別,盛岡,水沢" >> $GITHUB_OUTPUT ;;       # 火曜: 北日本
+              3) echo "tracks=金沢,笠松,名古屋" >> $GITHUB_OUTPUT ;;     # 水曜: 中部
+              4) echo "tracks=園田,姫路,高知,佐賀" >> $GITHUB_OUTPUT ;;  # 木曜: 西日本
+              *) echo "tracks=" >> $GITHUB_OUTPUT ;;
+            esac
+          fi
+
+      - name: Train models
+        if: steps.tracks.outputs.tracks != ''
+        run: |
+          echo "Training: ${{ steps.tracks.outputs.tracks }}"
+          python train.py "${{ steps.tracks.outputs.tracks }}"
 
       - name: Commit and push
+        if: steps.tracks.outputs.tracks != ''
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add *.pkl
-          git diff --staged --quiet || git commit -m "🤖 モデル自動更新 $(date +'%Y-%m-%d')"
+          git add models/*.pkl
+          git diff --staged --quiet || git commit -m "🤖 モデル更新: ${{ steps.tracks.outputs.tracks }} $(date +'%Y-%m-%d')"
           git push

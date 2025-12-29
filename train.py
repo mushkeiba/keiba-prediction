@@ -20,20 +20,20 @@ import lightgbm as lgb
 
 # ========== 設定 ==========
 TRACKS = {
-    "大井": {"code": "44", "model": "model_ohi.pkl"},
-    "川崎": {"code": "45", "model": "model_kawasaki.pkl"},
-    "船橋": {"code": "43", "model": "model_funabashi.pkl"},
-    "浦和": {"code": "42", "model": "model_urawa.pkl"},
-    "門別": {"code": "30", "model": "model_monbetsu.pkl"},
-    "盛岡": {"code": "35", "model": "model_morioka.pkl"},
-    "水沢": {"code": "36", "model": "model_mizusawa.pkl"},
-    "金沢": {"code": "46", "model": "model_kanazawa.pkl"},
-    "笠松": {"code": "47", "model": "model_kasamatsu.pkl"},
-    "名古屋": {"code": "48", "model": "model_nagoya.pkl"},
-    "園田": {"code": "50", "model": "model_sonoda.pkl"},
-    "姫路": {"code": "51", "model": "model_himeji.pkl"},
-    "高知": {"code": "54", "model": "model_kochi.pkl"},
-    "佐賀": {"code": "55", "model": "model_saga.pkl"},
+    "大井": {"code": "44", "model": "models/model_ohi.pkl"},
+    "川崎": {"code": "45", "model": "models/model_kawasaki.pkl"},
+    "船橋": {"code": "43", "model": "models/model_funabashi.pkl"},
+    "浦和": {"code": "42", "model": "models/model_urawa.pkl"},
+    "門別": {"code": "30", "model": "models/model_monbetsu.pkl"},
+    "盛岡": {"code": "35", "model": "models/model_morioka.pkl"},
+    "水沢": {"code": "36", "model": "models/model_mizusawa.pkl"},
+    "金沢": {"code": "46", "model": "models/model_kanazawa.pkl"},
+    "笠松": {"code": "47", "model": "models/model_kasamatsu.pkl"},
+    "名古屋": {"code": "48", "model": "models/model_nagoya.pkl"},
+    "園田": {"code": "50", "model": "models/model_sonoda.pkl"},
+    "姫路": {"code": "51", "model": "models/model_himeji.pkl"},
+    "高知": {"code": "54", "model": "models/model_kochi.pkl"},
+    "佐賀": {"code": "55", "model": "models/model_saga.pkl"},
 }
 
 DAYS = 180  # 取得日数

@@ -34,20 +34,20 @@ app.add_middleware(
 
 # ========== 競馬場設定 ==========
 TRACKS = {
-    "44": {"name": "大井", "model": "model_ohi.pkl", "emoji": "🏟️"},
-    "45": {"name": "川崎", "model": "model_kawasaki.pkl", "emoji": "🌊"},
-    "43": {"name": "船橋", "model": "model_funabashi.pkl", "emoji": "⚓"},
-    "42": {"name": "浦和", "model": "model_urawa.pkl", "emoji": "🌸"},
-    "30": {"name": "門別", "model": "model_monbetsu.pkl", "emoji": "🐴"},
-    "35": {"name": "盛岡", "model": "model_morioka.pkl", "emoji": "⛰️"},
-    "36": {"name": "水沢", "model": "model_mizusawa.pkl", "emoji": "💧"},
-    "46": {"name": "金沢", "model": "model_kanazawa.pkl", "emoji": "✨"},
-    "47": {"name": "笠松", "model": "model_kasamatsu.pkl", "emoji": "🎋"},
-    "48": {"name": "名古屋", "model": "model_nagoya.pkl", "emoji": "🏯"},
-    "50": {"name": "園田", "model": "model_sonoda.pkl", "emoji": "🌳"},
-    "51": {"name": "姫路", "model": "model_himeji.pkl", "emoji": "🏰"},
-    "54": {"name": "高知", "model": "model_kochi.pkl", "emoji": "🐋"},
-    "55": {"name": "佐賀", "model": "model_saga.pkl", "emoji": "🎋"},
+    "44": {"name": "大井", "model": "models/model_ohi.pkl", "emoji": "🏟️"},
+    "45": {"name": "川崎", "model": "models/model_kawasaki.pkl", "emoji": "🌊"},
+    "43": {"name": "船橋", "model": "models/model_funabashi.pkl", "emoji": "⚓"},
+    "42": {"name": "浦和", "model": "models/model_urawa.pkl", "emoji": "🌸"},
+    "30": {"name": "門別", "model": "models/model_monbetsu.pkl", "emoji": "🐴"},
+    "35": {"name": "盛岡", "model": "models/model_morioka.pkl", "emoji": "⛰️"},
+    "36": {"name": "水沢", "model": "models/model_mizusawa.pkl", "emoji": "💧"},
+    "46": {"name": "金沢", "model": "models/model_kanazawa.pkl", "emoji": "✨"},
+    "47": {"name": "笠松", "model": "models/model_kasamatsu.pkl", "emoji": "🎋"},
+    "48": {"name": "名古屋", "model": "models/model_nagoya.pkl", "emoji": "🏯"},
+    "50": {"name": "園田", "model": "models/model_sonoda.pkl", "emoji": "🌳"},
+    "51": {"name": "姫路", "model": "models/model_himeji.pkl", "emoji": "🏰"},
+    "54": {"name": "高知", "model": "models/model_kochi.pkl", "emoji": "🐋"},
+    "55": {"name": "佐賀", "model": "models/model_saga.pkl", "emoji": "🎋"},
 }
 
 # モデルキャッシュ
@@ -55,7 +55,7 @@ model_cache = {}
 
 # 旧モデル名との互換性
 MODEL_ALIASES = {
-    "model_ohi.pkl": ["model_v2.pkl", "model_ohi.pkl"],
+    "models/model_ohi.pkl": ["models/model_ohi.pkl", "model_v2.pkl"],
 }
 
 
