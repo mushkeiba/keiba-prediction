@@ -179,105 +179,55 @@ class NARScraper:
             print(f'Error: {e}')
 
     def get_odds(self, race_id: str, horse_names: list = None) -> dict:
-        """単勝オッズを取得（複数ソースから試行）"""
+        """単勝オッズを取得（出馬表の予想オッズ列から）"""
         odds_dict = {}
 
-        # 1. 単勝オッズ専用ページから取得
-        url = f"{self.BASE_URL}/odds/index.html?race_id={race_id}&type=b1"
+        # 1. 出馬表ページから予想オッズを取得（最も確実）
+        shutuba_url = f"{self.BASE_URL}/race/shutuba.html?race_id={race_id}"
         try:
-            soup = self._fetch(url, encoding='UTF-8')
+            soup = self._fetch(shutuba_url)
+            table = soup.find('table', class_='ShutubaTable')
+            if not table:
+                table = soup.find('table', class_='RaceTable01')
 
-            # Odds_Tableクラスを持つテーブルを探す
-            odds_table = soup.find('table', class_='Odds_Table')
-            if not odds_table:
-                odds_table = soup.find('table', id='odds_tan_block')
-            if not odds_table:
-                # 全テーブルから探す
-                for table in soup.find_all('table'):
-                    if table.find('td', class_='Odds'):
-                        odds_table = table
-                        break
-
-            if odds_table:
-                for tr in odds_table.find_all('tr'):
+            if table:
+                for tr in table.find_all('tr'):
                     tds = tr.find_all('td')
                     if len(tds) >= 2:
-                        # 馬番を探す
+                        # 馬番は通常2番目のtd（1番目は枠番）
                         umaban = None
                         odds_val = None
 
-                        for td in tds:
+                        # 馬番を取得（Umabanクラスまたは2番目のtd）
+                        for i, td in enumerate(tds[:3]):
                             td_class = ' '.join(td.get('class', []))
                             text = td.get_text(strip=True)
-
-                            # 馬番（Umabanクラスまたは1-18の数字）
-                            if 'Umaban' in td_class or 'Num' in td_class:
+                            if 'Umaban' in td_class or (i == 1 and text.isdigit()):
                                 if text.isdigit() and 1 <= int(text) <= 18:
                                     umaban = int(text)
+                                    break
 
-                            # オッズ（Oddsクラスまたは小数点を含む数字）
-                            if 'Odds' in td_class or 'odds' in td_class:
+                        # 予想オッズを取得（Popular列、通常は後ろの方のtd）
+                        for td in tds:
+                            td_class = ' '.join(td.get('class', []))
+                            # Popularクラスまたはodds関連のクラスを持つセル
+                            if 'Popular' in td_class or 'Odds' in td_class or 'odds' in td_class.lower():
+                                text = td.get_text(strip=True)
                                 odds_match = re.search(r'(\d+\.?\d*)', text)
                                 if odds_match:
                                     val = float(odds_match.group(1))
                                     if 1.0 <= val <= 999.9:
                                         odds_val = val
-
-                        # クラスで見つからなかった場合、テキストから探す
-                        if not umaban or not odds_val:
-                            for i, td in enumerate(tds):
-                                text = td.get_text(strip=True)
-                                if not umaban and text.isdigit() and 1 <= int(text) <= 18:
-                                    umaban = int(text)
-                                if not odds_val:
-                                    odds_match = re.match(r'^(\d+\.\d)$', text)
-                                    if odds_match:
-                                        val = float(odds_match.group(1))
-                                        if 1.0 <= val <= 999.9:
-                                            odds_val = val
+                                        break
 
                         if umaban and odds_val:
                             odds_dict[umaban] = odds_val
 
             if odds_dict:
+                print(f"DEBUG shutuba odds: {odds_dict}")
                 return odds_dict
         except Exception as e:
-            print(f'Odds table error: {e}')
-
-        # 2. 旧形式のオッズページから取得
-        url2 = f"{self.BASE_URL}/odds/odds_get_form.html?race_id={race_id}&type=b1"
-        try:
-            soup = self._fetch(url2, encoding='UTF-8')
-
-            for tr in soup.find_all('tr'):
-                tds = tr.find_all('td')
-                if len(tds) >= 3:
-                    try:
-                        # 各セルをチェック
-                        umaban = None
-                        odds_val = None
-
-                        for td in tds:
-                            text = td.get_text(strip=True)
-                            # 馬番
-                            if text.isdigit() and 1 <= int(text) <= 18 and umaban is None:
-                                umaban = int(text)
-                            # オッズ
-                            odds_match = re.match(r'^(\d+\.\d)$', text)
-                            if odds_match and odds_val is None:
-                                val = float(odds_match.group(1))
-                                if 1.0 <= val <= 999.9:
-                                    odds_val = val
-
-                        if umaban and odds_val:
-                            odds_dict[umaban] = odds_val
-                    except (ValueError, IndexError):
-                        continue
-
-            if odds_dict:
-                return odds_dict
-        except Exception as e:
-            print(f'Odds form error: {e}')
+            print(f'Shutuba odds error: {e}')
 
         # オッズページから取得できなかった場合、スマホ版結果ページから全馬のオッズを取得
         # スマホ版は結果テーブルに全馬の単勝オッズが含まれている
