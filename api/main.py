@@ -182,48 +182,102 @@ class NARScraper:
         """単勝オッズを取得（複数ソースから試行）"""
         odds_dict = {}
 
-        # 1. オッズページから取得（開催中のレース用）
-        url = f"{self.BASE_URL}/odds/odds_get_form.html?race_id={race_id}&type=b1"
+        # 1. 単勝オッズ専用ページから取得
+        url = f"{self.BASE_URL}/odds/index.html?race_id={race_id}&type=b1"
         try:
             soup = self._fetch(url, encoding='UTF-8')
 
-            # オッズページの馬名を取得して、正しいレースか確認
-            page_horse_names = []
-            for tr in soup.find_all('tr'):
-                horse_link = tr.find('a', href=re.compile(r'/horse/'))
-                if horse_link:
-                    page_horse_names.append(horse_link.get_text(strip=True))
+            # Odds_Tableクラスを持つテーブルを探す
+            odds_table = soup.find('table', class_='Odds_Table')
+            if not odds_table:
+                odds_table = soup.find('table', id='odds_tan_block')
+            if not odds_table:
+                # 全テーブルから探す
+                for table in soup.find_all('table'):
+                    if table.find('td', class_='Odds'):
+                        odds_table = table
+                        break
 
-            # 馬名リストが渡されていて、ページの馬名と一致するか確認
-            is_correct_race = True
-            if horse_names and page_horse_names:
-                # 少なくとも1頭が一致するか確認
-                is_correct_race = any(name in page_horse_names for name in horse_names[:3])
-
-            if is_correct_race and page_horse_names:
-                # オッズテーブルから取得
-                for tr in soup.find_all('tr'):
+            if odds_table:
+                for tr in odds_table.find_all('tr'):
                     tds = tr.find_all('td')
-                    if len(tds) >= 4:
-                        try:
-                            umaban_text = tds[1].get_text(strip=True)
-                            if umaban_text.isdigit() and 1 <= int(umaban_text) <= 18:
-                                umaban = int(umaban_text)
-                                for td in reversed(tds):
-                                    text = td.get_text(strip=True)
-                                    odds_match = re.match(r'^(\d+\.?\d*)$', text)
+                    if len(tds) >= 2:
+                        # 馬番を探す
+                        umaban = None
+                        odds_val = None
+
+                        for td in tds:
+                            td_class = ' '.join(td.get('class', []))
+                            text = td.get_text(strip=True)
+
+                            # 馬番（Umabanクラスまたは1-18の数字）
+                            if 'Umaban' in td_class or 'Num' in td_class:
+                                if text.isdigit() and 1 <= int(text) <= 18:
+                                    umaban = int(text)
+
+                            # オッズ（Oddsクラスまたは小数点を含む数字）
+                            if 'Odds' in td_class or 'odds' in td_class:
+                                odds_match = re.search(r'(\d+\.?\d*)', text)
+                                if odds_match:
+                                    val = float(odds_match.group(1))
+                                    if 1.0 <= val <= 999.9:
+                                        odds_val = val
+
+                        # クラスで見つからなかった場合、テキストから探す
+                        if not umaban or not odds_val:
+                            for i, td in enumerate(tds):
+                                text = td.get_text(strip=True)
+                                if not umaban and text.isdigit() and 1 <= int(text) <= 18:
+                                    umaban = int(text)
+                                if not odds_val:
+                                    odds_match = re.match(r'^(\d+\.\d)$', text)
                                     if odds_match:
                                         val = float(odds_match.group(1))
-                                        if 1.0 <= val <= 500:
-                                            odds_dict[umaban] = val
-                                            break
-                        except (ValueError, IndexError):
-                            continue
+                                        if 1.0 <= val <= 999.9:
+                                            odds_val = val
 
-                if odds_dict:
-                    return odds_dict
+                        if umaban and odds_val:
+                            odds_dict[umaban] = odds_val
+
+            if odds_dict:
+                return odds_dict
         except Exception as e:
-            print(f'Odds page error: {e}')
+            print(f'Odds table error: {e}')
+
+        # 2. 旧形式のオッズページから取得
+        url2 = f"{self.BASE_URL}/odds/odds_get_form.html?race_id={race_id}&type=b1"
+        try:
+            soup = self._fetch(url2, encoding='UTF-8')
+
+            for tr in soup.find_all('tr'):
+                tds = tr.find_all('td')
+                if len(tds) >= 3:
+                    try:
+                        # 各セルをチェック
+                        umaban = None
+                        odds_val = None
+
+                        for td in tds:
+                            text = td.get_text(strip=True)
+                            # 馬番
+                            if text.isdigit() and 1 <= int(text) <= 18 and umaban is None:
+                                umaban = int(text)
+                            # オッズ
+                            odds_match = re.match(r'^(\d+\.\d)$', text)
+                            if odds_match and odds_val is None:
+                                val = float(odds_match.group(1))
+                                if 1.0 <= val <= 999.9:
+                                    odds_val = val
+
+                        if umaban and odds_val:
+                            odds_dict[umaban] = odds_val
+                    except (ValueError, IndexError):
+                        continue
+
+            if odds_dict:
+                return odds_dict
+        except Exception as e:
+            print(f'Odds form error: {e}')
 
         # オッズページから取得できなかった場合、スマホ版結果ページから全馬のオッズを取得
         # スマホ版は結果テーブルに全馬の単勝オッズが含まれている
