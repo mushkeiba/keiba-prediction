@@ -750,11 +750,16 @@ def predict_single_race(request: SingleRaceRequest):
         raw_win_rate = float(row.get('horse_win_rate') or 0)
         raw_show_rate = float(row.get('horse_show_rate') or 0)
 
+        # デバッグ: 全馬の値を出力
+        print(f"DEBUG predict_single_race horse {horse_num}: raw_win={raw_win_rate}, raw_show={raw_show_rate}")
+
         # 異常値チェック: 正常な勝率は0-1の範囲
         # 1より大きい場合はデータ異常（horse_runsなどが混入）なので0にリセット
         if raw_win_rate > 1 or raw_win_rate < 0:
+            print(f"DEBUG ABNORMAL win_rate detected: {raw_win_rate}")
             raw_win_rate = 0
         if raw_show_rate > 1 or raw_show_rate < 0:
+            print(f"DEBUG ABNORMAL show_rate detected: {raw_show_rate}")
             raw_show_rate = 0
 
         win_rate = raw_win_rate * 100
