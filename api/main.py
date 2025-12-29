@@ -188,22 +188,46 @@ class NARScraper:
             # オッズテーブルから取得
             for tr in soup.find_all('tr'):
                 tds = tr.find_all('td')
-                if len(tds) >= 2:
-                    # 馬番を探す
-                    umaban = None
-                    odds_val = None
+                if len(tds) >= 4:
+                    # 通常のテーブル構造: 枠, 馬番, ..., オッズ
+                    try:
+                        # 2番目のtdが馬番のことが多い
+                        umaban_text = tds[1].get_text(strip=True)
+                        if umaban_text.isdigit() and 1 <= int(umaban_text) <= 18:
+                            umaban = int(umaban_text)
 
-                    for td in tds:
+                            # 最後の方のtdからオッズを探す
+                            for td in reversed(tds):
+                                text = td.get_text(strip=True)
+                                # オッズパターン: "1.2" or "12.3" or "123.4"
+                                odds_match = re.match(r'^(\d+\.?\d*)$', text)
+                                if odds_match:
+                                    val = float(odds_match.group(1))
+                                    # オッズは通常1.0以上500以下
+                                    if 1.0 <= val <= 500:
+                                        odds_dict[umaban] = val
+                                        break
+                    except (ValueError, IndexError):
+                        continue
+
+            # 別のパターン: Odds_Tableクラス
+            for table in soup.find_all('table', class_=re.compile(r'Odds', re.I)):
+                for tr in table.find_all('tr'):
+                    tds = tr.find_all('td')
+                    for i, td in enumerate(tds):
                         text = td.get_text(strip=True)
-                        # 馬番（1-18の数字）
-                        if text.isdigit() and 1 <= int(text) <= 18 and umaban is None:
+                        if text.isdigit() and 1 <= int(text) <= 18:
                             umaban = int(text)
-                        # オッズ（小数点を含む数字）
-                        if re.match(r'^\d+\.\d+$', text):
-                            odds_val = float(text)
-
-                    if umaban and odds_val:
-                        odds_dict[umaban] = odds_val
+                            # 次のtdからオッズを探す
+                            for next_td in tds[i+1:]:
+                                next_text = next_td.get_text(strip=True)
+                                odds_match = re.match(r'^(\d+\.?\d*)$', next_text)
+                                if odds_match:
+                                    val = float(odds_match.group(1))
+                                    if 1.0 <= val <= 500 and umaban not in odds_dict:
+                                        odds_dict[umaban] = val
+                                        break
+                            break
 
             return odds_dict
         except Exception as e:
