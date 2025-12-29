@@ -590,19 +590,19 @@ def predict(request: PredictRequest):
             odds = odds_dict.get(horse_num, 0)
             prob = float(row['prob'])
 
-            # 勝率・複勝率を取得（0-1の範囲に正規化）
-            raw_win_rate = float(row.get('horse_win_rate', 0))
-            raw_show_rate = float(row.get('horse_show_rate', 0))
+            # 勝率・複勝率を取得（0-1の範囲であるべき）
+            raw_win_rate = float(row.get('horse_win_rate') or 0)
+            raw_show_rate = float(row.get('horse_show_rate') or 0)
 
-            # 値が1より大きい場合は既にパーセンテージなので100で割る
-            if raw_win_rate > 1:
-                raw_win_rate = raw_win_rate / 100
-            if raw_show_rate > 1:
-                raw_show_rate = raw_show_rate / 100
+            # 異常値チェック: 正常な勝率は0-1の範囲
+            # 1より大きい場合はデータ異常（horse_runsなどが混入）なので0にリセット
+            if raw_win_rate > 1 or raw_win_rate < 0:
+                raw_win_rate = 0
+            if raw_show_rate > 1 or raw_show_rate < 0:
+                raw_show_rate = 0
 
-            # 0-100%の範囲にクランプ
-            win_rate = min(max(raw_win_rate * 100, 0), 100)
-            show_rate = min(max(raw_show_rate * 100, 0), 100)
+            win_rate = raw_win_rate * 100
+            show_rate = raw_show_rate * 100
 
             # 妙味計算: 予測確率 × オッズ > 1 なら妙味あり
             # 例: 予測30% × オッズ5.0 = 1.5 → 期待値プラス
@@ -718,19 +718,19 @@ def predict_single_race(request: SingleRaceRequest):
         odds = odds_dict.get(horse_num, 0)
         prob = float(row['prob'])
 
-        # 勝率・複勝率を取得（0-1の範囲に正規化）
-        raw_win_rate = float(row.get('horse_win_rate', 0))
-        raw_show_rate = float(row.get('horse_show_rate', 0))
+        # 勝率・複勝率を取得（0-1の範囲であるべき）
+        raw_win_rate = float(row.get('horse_win_rate') or 0)
+        raw_show_rate = float(row.get('horse_show_rate') or 0)
 
-        # 値が1より大きい場合は既にパーセンテージなので100で割る
-        if raw_win_rate > 1:
-            raw_win_rate = raw_win_rate / 100
-        if raw_show_rate > 1:
-            raw_show_rate = raw_show_rate / 100
+        # 異常値チェック: 正常な勝率は0-1の範囲
+        # 1より大きい場合はデータ異常（horse_runsなどが混入）なので0にリセット
+        if raw_win_rate > 1 or raw_win_rate < 0:
+            raw_win_rate = 0
+        if raw_show_rate > 1 or raw_show_rate < 0:
+            raw_show_rate = 0
 
-        # 0-100%の範囲にクランプ
-        win_rate = min(max(raw_win_rate * 100, 0), 100)
-        show_rate = min(max(raw_show_rate * 100, 0), 100)
+        win_rate = raw_win_rate * 100
+        show_rate = raw_show_rate * 100
 
         expected_value = prob * odds if odds > 0 else 0
         is_value = expected_value > 1.0
