@@ -179,10 +179,10 @@ class NARScraper:
             print(f'Error: {e}')
 
     def get_odds(self, race_id: str, horse_names: list = None) -> dict:
-        """単勝オッズを取得（開催中はオッズページ、終了後は結果ページから）"""
+        """単勝オッズを取得（開催中はオッズページ、終了後はスマホ版結果ページから）"""
         odds_dict = {}
 
-        # まずオッズページから取得を試みる
+        # まずオッズページから取得を試みる（開催中のレース用）
         url = f"{self.BASE_URL}/odds/odds_get_form.html?race_id={race_id}&type=b1"
         try:
             soup = self._fetch(url, encoding='UTF-8')
@@ -225,13 +225,59 @@ class NARScraper:
         except Exception as e:
             print(f'Odds page error: {e}')
 
-        # オッズページから取得できなかった場合、結果ページから払戻金を取得
+        # オッズページから取得できなかった場合、スマホ版結果ページから全馬のオッズを取得
+        # スマホ版は結果テーブルに全馬の単勝オッズが含まれている
+        sp_result_url = f"https://nar.sp.netkeiba.com/race/race_result.html?race_id={race_id}"
+        try:
+            soup = self._fetch(sp_result_url, encoding='UTF-8')
+
+            # スマホ版の結果テーブルからオッズを取得
+            # テーブル内の各行から馬番とオッズを抽出
+            for tr in soup.find_all('tr'):
+                tds = tr.find_all('td')
+                if len(tds) >= 8:
+                    try:
+                        # 馬番を探す（通常は最初の方のtd）
+                        umaban = None
+                        odds_val = None
+
+                        for i, td in enumerate(tds):
+                            text = td.get_text(strip=True)
+                            # 馬番（1-18の数字、通常2桁以下）
+                            if text.isdigit() and 1 <= int(text) <= 18 and umaban is None:
+                                # 着順ではなく馬番かを確認（着順は1から始まる小さい数字）
+                                # class属性やdata属性で判別できる場合もある
+                                td_class = td.get('class', [])
+                                if 'Umaban' in str(td_class) or i >= 1:
+                                    umaban = int(text)
+
+                        # オッズを探す（小数点を含む数字）
+                        for td in tds:
+                            text = td.get_text(strip=True)
+                            # オッズパターン: "1.5" or "29.8" など
+                            odds_match = re.match(r'^(\d+\.\d+)$', text)
+                            if odds_match:
+                                val = float(odds_match.group(1))
+                                if 1.0 <= val <= 999.9:
+                                    odds_val = val
+                                    break
+
+                        if umaban and odds_val:
+                            odds_dict[umaban] = odds_val
+
+                    except (ValueError, IndexError):
+                        continue
+
+            if odds_dict:
+                return odds_dict
+
+        except Exception as e:
+            print(f'SP result page error: {e}')
+
+        # 最後の手段: PC版結果ページの払戻金から勝ち馬のみ取得
         result_url = f"{self.BASE_URL}/race/result.html?race_id={race_id}"
         try:
             soup = self._fetch(result_url)
-
-            # 払戻金テーブルから単勝を取得
-            # 「単勝」の行を探す
             payout_table = soup.find('table', class_='Payout_Detail_Table')
             if payout_table:
                 for tr in payout_table.find_all('tr'):
@@ -239,47 +285,14 @@ class NARScraper:
                     if th and '単勝' in th.get_text():
                         tds = tr.find_all('td')
                         if len(tds) >= 2:
-                            # 馬番
                             umaban_text = tds[0].get_text(strip=True)
-                            # 払戻金（例: "150円" → 1.5倍）
                             payout_text = tds[1].get_text(strip=True)
-
                             if umaban_text.isdigit():
                                 umaban = int(umaban_text)
-                                # 払戻金を抽出（"150円" or "1,500円"）
                                 payout_match = re.search(r'([\d,]+)', payout_text)
                                 if payout_match:
                                     payout = int(payout_match.group(1).replace(',', ''))
-                                    # 払戻金 ÷ 100 = オッズ（100円購入時）
                                     odds_dict[umaban] = payout / 100
-
-            # 別のパターン: ResultTable内のオッズ列
-            if not odds_dict:
-                result_table = soup.find('table', class_='ResultTable')
-                if result_table:
-                    for tr in result_table.find_all('tr'):
-                        tds = tr.find_all('td')
-                        if len(tds) >= 10:
-                            try:
-                                # 馬番は通常2列目
-                                umaban_td = tds[1] if len(tds) > 1 else None
-                                if umaban_td:
-                                    umaban_text = umaban_td.get_text(strip=True)
-                                    if umaban_text.isdigit():
-                                        umaban = int(umaban_text)
-                                        # 単勝オッズは最後の方の列
-                                        for td in reversed(tds):
-                                            text = td.get_text(strip=True)
-                                            # "1.5" or "(1.5)" パターン
-                                            odds_match = re.search(r'(\d+\.?\d*)', text)
-                                            if odds_match:
-                                                val = float(odds_match.group(1))
-                                                if 1.0 <= val <= 500:
-                                                    odds_dict[umaban] = val
-                                                    break
-                            except (ValueError, IndexError):
-                                continue
-
             return odds_dict
         except Exception as e:
             print(f'Result page error: {e}')
