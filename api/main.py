@@ -182,37 +182,7 @@ class NARScraper:
         """単勝オッズを取得（複数ソースから試行）"""
         odds_dict = {}
 
-        # 1. 出馬表ページからオッズを取得（最も確実）
-        shutuba_url = f"{self.BASE_URL}/race/shutuba.html?race_id={race_id}"
-        try:
-            soup = self._fetch(shutuba_url)
-            table = soup.find('table', class_='ShutubaTable')
-            if not table:
-                table = soup.find('table', class_='RaceTable01')
-            if table:
-                for tr in table.find_all('tr'):
-                    tds = tr.find_all('td')
-                    if len(tds) >= 2:
-                        # 馬番を取得（2番目のtd）
-                        umaban_text = tds[1].get_text(strip=True) if len(tds) > 1 else ""
-                        if umaban_text.isdigit() and 1 <= int(umaban_text) <= 18:
-                            umaban = int(umaban_text)
-                            # オッズを探す（Popular列やOdds列）
-                            for td in tds:
-                                text = td.get_text(strip=True)
-                                # "1.5" や "12.3" などのオッズ形式
-                                odds_match = re.search(r'^(\d+\.\d)$', text)
-                                if odds_match:
-                                    val = float(odds_match.group(1))
-                                    if 1.0 <= val <= 999.9:
-                                        odds_dict[umaban] = val
-                                        break
-            if odds_dict:
-                return odds_dict
-        except Exception as e:
-            print(f'Shutuba page error: {e}')
-
-        # 2. オッズページから取得（開催中のレース用）
+        # 1. オッズページから取得（開催中のレース用）
         url = f"{self.BASE_URL}/odds/odds_get_form.html?race_id={race_id}&type=b1"
         try:
             soup = self._fetch(url, encoding='UTF-8')
@@ -620,6 +590,20 @@ def predict(request: PredictRequest):
             odds = odds_dict.get(horse_num, 0)
             prob = float(row['prob'])
 
+            # 勝率・複勝率を取得（0-1の範囲に正規化）
+            raw_win_rate = float(row.get('horse_win_rate', 0))
+            raw_show_rate = float(row.get('horse_show_rate', 0))
+
+            # 値が1より大きい場合は既にパーセンテージなので100で割る
+            if raw_win_rate > 1:
+                raw_win_rate = raw_win_rate / 100
+            if raw_show_rate > 1:
+                raw_show_rate = raw_show_rate / 100
+
+            # 0-100%の範囲にクランプ
+            win_rate = min(max(raw_win_rate * 100, 0), 100)
+            show_rate = min(max(raw_show_rate * 100, 0), 100)
+
             # 妙味計算: 予測確率 × オッズ > 1 なら妙味あり
             # 例: 予測30% × オッズ5.0 = 1.5 → 期待値プラス
             expected_value = prob * odds if odds > 0 else 0
@@ -631,8 +615,8 @@ def predict(request: PredictRequest):
                 "name": row.get('horse_name', '不明'),
                 "jockey": row.get('jockey_name', '不明'),
                 "prob": round(prob, 3),
-                "win_rate": round(float(row.get('horse_win_rate', 0)) * 100, 1),
-                "show_rate": round(float(row.get('horse_show_rate', 0)) * 100, 1),
+                "win_rate": round(win_rate, 1),
+                "show_rate": round(show_rate, 1),
                 "odds": odds,
                 "expected_value": round(expected_value, 2),
                 "is_value": is_value
@@ -733,6 +717,21 @@ def predict_single_race(request: SingleRaceRequest):
         horse_num = int(row['horse_number']) if pd.notna(row.get('horse_number')) else 0
         odds = odds_dict.get(horse_num, 0)
         prob = float(row['prob'])
+
+        # 勝率・複勝率を取得（0-1の範囲に正規化）
+        raw_win_rate = float(row.get('horse_win_rate', 0))
+        raw_show_rate = float(row.get('horse_show_rate', 0))
+
+        # 値が1より大きい場合は既にパーセンテージなので100で割る
+        if raw_win_rate > 1:
+            raw_win_rate = raw_win_rate / 100
+        if raw_show_rate > 1:
+            raw_show_rate = raw_show_rate / 100
+
+        # 0-100%の範囲にクランプ
+        win_rate = min(max(raw_win_rate * 100, 0), 100)
+        show_rate = min(max(raw_show_rate * 100, 0), 100)
+
         expected_value = prob * odds if odds > 0 else 0
         is_value = expected_value > 1.0
 
@@ -742,8 +741,8 @@ def predict_single_race(request: SingleRaceRequest):
             "name": row.get('horse_name', '不明'),
             "jockey": row.get('jockey_name', '不明'),
             "prob": round(prob, 3),
-            "win_rate": round(float(row.get('horse_win_rate', 0)) * 100, 1),
-            "show_rate": round(float(row.get('horse_show_rate', 0)) * 100, 1),
+            "win_rate": round(win_rate, 1),
+            "show_rate": round(show_rate, 1),
             "odds": odds,
             "expected_value": round(expected_value, 2),
             "is_value": is_value
