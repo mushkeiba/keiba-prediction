@@ -1,23 +1,24 @@
-# 地方競馬 予測アプリ
-import streamlit as st
-import pandas as pd
-import numpy as np
+"""
+地方競馬モデル学習スクリプト
+GitHub Actionsから自動実行される
+"""
+
+import os
+import sys
+import time
+import re
 import pickle
+from datetime import datetime, timedelta
+
 import requests
 from bs4 import BeautifulSoup
-import re
-import time
-from datetime import datetime, timedelta
-import os
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import roc_auc_score
+import lightgbm as lgb
 
-# ページ設定
-st.set_page_config(
-    page_title="地方競馬 予測",
-    page_icon="🏇",
-    layout="wide"
-)
-
-# ========== 競馬場設定 ==========
+# ========== 設定 ==========
 TRACKS = {
     "大井": {"code": "44", "model": "model_ohi.pkl"},
     "川崎": {"code": "45", "model": "model_kawasaki.pkl"},
@@ -35,16 +36,12 @@ TRACKS = {
     "佐賀": {"code": "55", "model": "model_saga.pkl"},
 }
 
-# 旧モデル名との互換性（大井）
-MODEL_ALIASES = {
-    "model_ohi.pkl": ["model_v2.pkl", "model_ohi.pkl"],
-}
+DAYS = 180  # 取得日数
+DELAY = 0.5  # リクエスト間隔
 
 
 # ========== スクレイパー ==========
 class NARScraper:
-    """地方競馬スクレイパー"""
-
     BASE_URL = "https://nar.netkeiba.com"
     DB_URL = "https://db.netkeiba.com"
 
@@ -58,12 +55,11 @@ class NARScraper:
 
     def _fetch(self, url, encoding='EUC-JP'):
         time.sleep(self.delay)
-        r = self.session.get(url)
+        r = self.session.get(url, timeout=30)
         r.encoding = encoding
         return BeautifulSoup(r.text, 'lxml')
 
     def get_race_list_by_date(self, date: str) -> list:
-        """指定日のレース一覧を取得"""
         url = f"{self.BASE_URL}/top/race_list_sub.html?kaisai_date={date}"
         try:
             soup = self._fetch(url, encoding='UTF-8')
@@ -72,34 +68,29 @@ class NARScraper:
                 m = re.search(r'race_id=(\d+)', a['href'])
                 if m:
                     race_id = m.group(1)
-                    # 競馬場コードでフィルタ（race_idの5-6桁目）
                     if len(race_id) >= 6 and race_id[4:6] == self.track_code:
                         ids.append(race_id)
             return list(set(ids))
-        except:
+        except Exception as e:
+            print(f"  レース一覧取得エラー: {e}")
             return []
 
     def get_race_data(self, race_id: str):
-        """出馬表データを取得"""
-        url = f"{self.BASE_URL}/race/shutuba.html?race_id={race_id}"
-
+        url = f"{self.BASE_URL}/race/result.html?race_id={race_id}"
         try:
             soup = self._fetch(url)
             info = {'race_id': race_id}
 
-            # レース名
             nm = soup.find('h1', class_='RaceName')
             if nm:
                 info['race_name'] = nm.get_text(strip=True)
 
-            # 距離
             rd = soup.find('div', class_='RaceData01')
             if rd:
                 dm = re.search(r'(\d{3,4})m', rd.get_text())
                 if dm:
                     info['distance'] = int(dm.group(1))
 
-            # テーブル取得
             table = soup.find('table', class_='ShutubaTable')
             if not table:
                 table = soup.find('table', class_='RaceTable01')
@@ -119,15 +110,17 @@ class NARScraper:
 
                 data = info.copy()
 
-                # 枠番・馬番
-                bracket_text = tds[0].get_text(strip=True)
+                # 着順・枠番・馬番
+                rank_text = tds[0].get_text(strip=True)
+                if rank_text.isdigit():
+                    data['rank'] = int(rank_text)
+                bracket_text = tds[1].get_text(strip=True)
                 if bracket_text.isdigit():
                     data['bracket'] = int(bracket_text)
-                umaban_text = tds[1].get_text(strip=True)
+                umaban_text = tds[2].get_text(strip=True)
                 if umaban_text.isdigit():
                     data['horse_number'] = int(umaban_text)
 
-                # 馬名・馬ID
                 horse_link = tr.find('a', href=re.compile(r'/horse/\d+'))
                 if horse_link:
                     data['horse_name'] = horse_link.get_text(strip=True)
@@ -135,7 +128,6 @@ class NARScraper:
                     if m:
                         data['horse_id'] = m.group(1)
 
-                # 騎手
                 jockey_link = tr.find('a', href=re.compile(r'/jockey/'))
                 if jockey_link:
                     data['jockey_name'] = jockey_link.get_text(strip=True)
@@ -143,7 +135,6 @@ class NARScraper:
                     if m:
                         data['jockey_id'] = m.group(1)
 
-                # 性齢・斤量
                 for td in tds:
                     text = td.get_text(strip=True)
                     if re.match(r'^[牡牝セ]\d$', text):
@@ -165,18 +156,17 @@ class NARScraper:
             return df
 
         except Exception as e:
-            st.error(f'エラー: {e}')
+            print(f"  レースデータ取得エラー: {e}")
             return None
 
     def get_horse_history(self, horse_id: str):
-        """馬の過去成績を取得"""
         if horse_id in self.horse_cache:
             return self.horse_cache[horse_id]
 
         url = f"{self.DB_URL}/horse/ajax_horse_results.html?id={horse_id}"
         try:
             time.sleep(self.delay)
-            r = self.session.get(url)
+            r = self.session.get(url, timeout=30)
             r.encoding = 'EUC-JP'
             soup = BeautifulSoup(r.text, 'lxml')
 
@@ -200,7 +190,6 @@ class NARScraper:
             return self._empty_stats()
 
     def get_jockey_stats(self, jockey_id: str):
-        """騎手成績を取得"""
         if jockey_id in self.jockey_cache:
             return self.jockey_cache[jockey_id]
 
@@ -254,17 +243,12 @@ class NARScraper:
             'horse_recent_avg_rank': 10, 'last_rank': 10
         }
 
-    def enrich_data(self, df, progress_callback=None):
-        """馬・騎手情報を付与"""
+    def enrich_with_history(self, df):
         df = df.copy()
 
-        # 馬の過去成績
         if 'horse_id' in df.columns:
             horse_data = []
-            unique_horses = df['horse_id'].dropna().unique()
-            for i, hid in enumerate(unique_horses):
-                if progress_callback:
-                    progress_callback(i / len(unique_horses) * 0.5, f'馬情報取得中... {i+1}/{len(unique_horses)}')
+            for hid in df['horse_id'].dropna().unique():
                 stats = self.get_horse_history(str(hid))
                 stats['horse_id'] = hid
                 horse_data.append(stats)
@@ -274,13 +258,9 @@ class NARScraper:
                 hdf['horse_id'] = hdf['horse_id'].astype(str)
                 df = df.merge(hdf, on='horse_id', how='left')
 
-        # 騎手成績
         if 'jockey_id' in df.columns:
             jockey_data = []
-            unique_jockeys = df['jockey_id'].dropna().unique()
-            for i, jid in enumerate(unique_jockeys):
-                if progress_callback:
-                    progress_callback(0.5 + i / len(unique_jockeys) * 0.5, f'騎手情報取得中... {i+1}/{len(unique_jockeys)}')
+            for jid in df['jockey_id'].dropna().unique():
                 stats = self.get_jockey_stats(str(jid))
                 stats['jockey_id'] = jid
                 jockey_data.append(stats)
@@ -307,8 +287,10 @@ class Processor:
 
     def process(self, df):
         df = df.copy()
+        if 'rank' in df.columns:
+            df = df[df['rank'].notna() & (df['rank'] > 0)]
 
-        num_cols = ['bracket','horse_number','age','weight_carried','distance',
+        num_cols = ['rank','bracket','horse_number','age','weight_carried','distance',
                     'field_size','horse_runs','horse_win_rate','horse_place_rate',
                     'horse_show_rate','horse_avg_rank','horse_recent_win_rate',
                     'horse_recent_show_rate','horse_recent_avg_rank','last_rank',
@@ -322,7 +304,7 @@ class Processor:
         else:
             df['sex_encoded'] = 0
 
-        df['track_encoded'] = 0  # 出馬表では馬場不明
+        df['track_encoded'] = 0
 
         if 'weight_carried' in df.columns and 'race_id' in df.columns:
             df['weight_diff'] = df.groupby('race_id')['weight_carried'].transform(lambda x: x - x.mean())
@@ -330,10 +312,10 @@ class Processor:
             df['weight_diff'] = 0
 
         if 'field_size' not in df.columns:
-            if 'race_id' in df.columns:
-                df['field_size'] = df.groupby('race_id')['race_id'].transform('count')
-            else:
-                df['field_size'] = 12
+            df['field_size'] = 12
+
+        if 'rank' in df.columns:
+            df['target'] = (df['rank'] <= 3).astype(int)
 
         for f in self.features:
             if f not in df.columns:
@@ -341,142 +323,115 @@ class Processor:
 
         return df
 
-    def get_features(self):
-        return self.features
+
+# ========== 学習 ==========
+def train_model(df, features):
+    X, y = df[features].fillna(-1), df['target']
+    X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
+
+    model = lgb.train(
+        {'objective':'binary','metric':'auc','num_leaves':31,'learning_rate':0.05,'verbose':-1},
+        lgb.Dataset(X_tr, y_tr), 500, [lgb.Dataset(X_te, y_te)],
+        callbacks=[lgb.early_stopping(50), lgb.log_evaluation(0)]
+    )
+
+    auc = roc_auc_score(y_te, model.predict(X_te))
+    return model, features, auc
 
 
-# ========== モデル読み込み ==========
-def load_model(model_name):
-    """学習済みモデルを読み込み"""
-    # エイリアスをチェック（旧モデル名との互換性）
-    paths_to_try = [model_name]
-    if model_name in MODEL_ALIASES:
-        paths_to_try = MODEL_ALIASES[model_name]
-
-    for path in paths_to_try:
-        if os.path.exists(path):
-            with open(path, 'rb') as f:
-                d = pickle.load(f)
-            return d['model'], d['features']
-
-    return None, None
+def save_model(model, features, path):
+    with open(path, 'wb') as f:
+        pickle.dump({'model': model, 'features': features}, f)
 
 
-# ========== メイン画面 ==========
-st.title('🏇 地方競馬 予測')
-st.markdown('---')
+# ========== メイン処理 ==========
+def train_track(track_name, track_info):
+    print(f"\n{'='*50}")
+    print(f"🏇 {track_name}競馬場")
+    print(f"{'='*50}")
 
-# サイドバー
-st.sidebar.header('設定')
+    scraper = NARScraper(track_info['code'], delay=DELAY)
+    processor = Processor()
 
-# 競馬場選択
-track_name = st.sidebar.selectbox(
-    '競馬場',
-    options=list(TRACKS.keys()),
-    index=0  # デフォルト: 大井
-)
-track_info = TRACKS[track_name]
+    # データ収集
+    print(f"データ収集中（過去{DAYS}日）...")
+    all_data = []
+    today = datetime.now()
 
-# モデル読み込み
-model, model_features = load_model(track_info['model'])
-
-# モデル状態表示
-if model is not None:
-    st.sidebar.success(f'✅ {track_name}モデル読込済')
-else:
-    st.sidebar.warning(f'⚠️ {track_name}モデルなし')
-    st.sidebar.caption(f'必要: {track_info["model"]}')
-
-# 日付選択
-target_date = st.sidebar.date_input(
-    '予測日',
-    value=datetime.now()
-)
-date_str = target_date.strftime('%Y%m%d')
-
-# 予測実行ボタン
-if st.sidebar.button('🔍 予測実行', type='primary'):
-    if model is None:
-        st.error(f'⚠️ {track_name}のモデルがありません')
-        st.info(f'Colabで{track_name}のモデルを学習して、{track_info["model"]}をアップロードしてください')
-    else:
-        scraper = NARScraper(track_info['code'], delay=0.5)
-        processor = Processor()
-
-        with st.spinner(f'{target_date.strftime("%Y/%m/%d")} {track_name}のレースを取得中...'):
-            race_ids = scraper.get_race_list_by_date(date_str)
-
+    for i in range(1, DAYS + 1):
+        d = (today - timedelta(days=i)).strftime('%Y%m%d')
+        race_ids = scraper.get_race_list_by_date(d)
         if not race_ids:
-            st.warning(f'{track_name}のレースが見つかりません。日付を確認してください。')
-        else:
-            st.success(f'{track_name}: {len(race_ids)}レース発見！')
+            continue
 
-            # 全レース処理
-            for rid in sorted(race_ids):
-                with st.spinner(f'レース {rid} を処理中...'):
-                    df = scraper.get_race_data(rid)
-                    if df is None:
-                        st.warning(f'{rid}: データ取得失敗')
-                        continue
+        for rid in race_ids:
+            df = scraper.get_race_data(rid)
+            if df is not None and len(df) > 0:
+                try:
+                    df = scraper.enrich_with_history(df)
+                except:
+                    pass
+                all_data.append(df)
 
-                    # 進捗表示用
-                    progress_bar = st.progress(0)
-                    status_text = st.empty()
+        if i % 30 == 0:
+            print(f"  {i}/{DAYS}日完了 ({len(all_data)}レース)")
 
-                    def update_progress(pct, msg):
-                        progress_bar.progress(pct)
-                        status_text.text(msg)
+    if not all_data:
+        print(f"⚠️ {track_name}: データが見つかりません")
+        return False
 
-                    df = scraper.enrich_data(df, update_progress)
-                    progress_bar.empty()
-                    status_text.empty()
+    df_all = pd.concat(all_data, ignore_index=True)
+    print(f"収集完了: {len(df_all)}件")
 
-                    df = processor.process(df)
+    # 前処理
+    df_processed = processor.process(df_all)
+    print(f"処理後: {len(df_processed)}件")
 
-                    # 予測
-                    X = df[model_features].fillna(-1)
-                    df['prob'] = model.predict(X)
-                    df['pred_rank'] = df['prob'].rank(ascending=False, method='min').astype(int)
-                    df = df.sort_values('prob', ascending=False)
+    if len(df_processed) < 100:
+        print(f"⚠️ {track_name}: データ不足（{len(df_processed)}件）")
+        return False
 
-                    # レース名表示
-                    race_name = df['race_name'].iloc[0] if 'race_name' in df.columns else rid
-                    st.subheader(f'🏁 {race_name}')
+    # 学習
+    print("モデル学習中...")
+    model, features, auc = train_model(df_processed, processor.features)
+    print(f"AUC: {auc:.4f}")
 
-                    # 結果表示
-                    cols = st.columns(3)
-                    for i, (_, row) in enumerate(df.head(3).iterrows()):
-                        with cols[i]:
-                            medal = ['🥇', '🥈', '🥉'][i]
-                            num = int(row['horse_number']) if pd.notna(row.get('horse_number')) else '-'
-                            st.metric(
-                                label=f"{medal} {i+1}位予測",
-                                value=f"{num}番 {row.get('horse_name', '?')}",
-                                delta=f"確率: {row['prob']:.1%}"
-                            )
-                            st.caption(f"勝率: {row.get('horse_win_rate', 0)*100:.0f}% / 複勝率: {row.get('horse_show_rate', 0)*100:.0f}%")
+    # 保存
+    save_model(model, features, track_info['model'])
+    print(f"✅ 保存: {track_info['model']}")
 
-                    # 全馬一覧（折りたたみ）
-                    with st.expander('全馬一覧'):
-                        display_df = df[['pred_rank', 'horse_number', 'horse_name', 'jockey_name', 'prob']].copy()
-                        display_df.columns = ['予測順位', '馬番', '馬名', '騎手', '確率']
-                        display_df['確率'] = display_df['確率'].apply(lambda x: f'{x:.1%}')
-                        st.dataframe(display_df, hide_index=True)
+    return True
 
-                    st.markdown('---')
 
-# モデル状況一覧
-st.sidebar.markdown('---')
-st.sidebar.subheader('モデル状況')
-for name, info in TRACKS.items():
-    exists = os.path.exists(info['model'])
-    # 旧モデル名もチェック
-    if not exists and info['model'] in MODEL_ALIASES:
-        exists = any(os.path.exists(p) for p in MODEL_ALIASES[info['model']])
-    icon = '✅' if exists else '❌'
-    st.sidebar.caption(f'{icon} {name}')
+def main():
+    # コマンドライン引数から対象競馬場を取得
+    target_tracks = []
+    if len(sys.argv) > 1 and sys.argv[1]:
+        target_tracks = [t.strip() for t in sys.argv[1].split(',')]
+        target_tracks = [t for t in target_tracks if t in TRACKS]
 
-# フッター
-st.sidebar.markdown('---')
-st.sidebar.caption('地方競馬予測システム v2')
-st.sidebar.caption('データ: netkeiba.com')
+    if not target_tracks:
+        target_tracks = list(TRACKS.keys())
+
+    print(f"🚀 学習開始: {', '.join(target_tracks)}")
+    print(f"取得日数: {DAYS}日")
+
+    results = {}
+    for track_name in target_tracks:
+        try:
+            success = train_track(track_name, TRACKS[track_name])
+            results[track_name] = "✅" if success else "⚠️"
+        except Exception as e:
+            print(f"❌ {track_name}: エラー - {e}")
+            results[track_name] = "❌"
+
+    # 結果サマリー
+    print(f"\n{'='*50}")
+    print("📊 結果サマリー")
+    print(f"{'='*50}")
+    for track, status in results.items():
+        print(f"  {status} {track}")
+
+
+if __name__ == "__main__":
+    main()

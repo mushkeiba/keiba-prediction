@@ -1,0 +1,44 @@
+name: Train Models
+
+on:
+  # 毎週月曜 朝6時（日本時間）に実行
+  schedule:
+    - cron: '0 21 * * 0'  # UTC 21:00 = JST 06:00 月曜
+
+  # 手動実行も可能
+  workflow_dispatch:
+    inputs:
+      tracks:
+        description: '学習する競馬場（カンマ区切り、空欄=全部）'
+        required: false
+        default: ''
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120  # 最大2時間
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install pandas numpy scikit-learn lightgbm beautifulsoup4 lxml requests
+
+      - name: Train models
+        run: |
+          python train.py ${{ github.event.inputs.tracks }}
+
+      - name: Commit and push
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add *.pkl
+          git diff --staged --quiet || git commit -m "🤖 モデル自動更新 $(date +'%Y-%m-%d')"
+          git push
