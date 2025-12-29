@@ -178,60 +178,111 @@ class NARScraper:
         except Exception as e:
             print(f'Error: {e}')
 
-    def get_odds(self, race_id: str) -> dict:
-        """単勝オッズを取得"""
+    def get_odds(self, race_id: str, horse_names: list = None) -> dict:
+        """単勝オッズを取得（開催中はオッズページ、終了後は結果ページから）"""
+        odds_dict = {}
+
+        # まずオッズページから取得を試みる
         url = f"{self.BASE_URL}/odds/odds_get_form.html?race_id={race_id}&type=b1"
         try:
             soup = self._fetch(url, encoding='UTF-8')
-            odds_dict = {}
 
-            # オッズテーブルから取得
+            # オッズページの馬名を取得して、正しいレースか確認
+            page_horse_names = []
             for tr in soup.find_all('tr'):
-                tds = tr.find_all('td')
-                if len(tds) >= 4:
-                    # 通常のテーブル構造: 枠, 馬番, ..., オッズ
-                    try:
-                        # 2番目のtdが馬番のことが多い
-                        umaban_text = tds[1].get_text(strip=True)
-                        if umaban_text.isdigit() and 1 <= int(umaban_text) <= 18:
-                            umaban = int(umaban_text)
+                horse_link = tr.find('a', href=re.compile(r'/horse/'))
+                if horse_link:
+                    page_horse_names.append(horse_link.get_text(strip=True))
 
-                            # 最後の方のtdからオッズを探す
-                            for td in reversed(tds):
-                                text = td.get_text(strip=True)
-                                # オッズパターン: "1.2" or "12.3" or "123.4"
-                                odds_match = re.match(r'^(\d+\.?\d*)$', text)
-                                if odds_match:
-                                    val = float(odds_match.group(1))
-                                    # オッズは通常1.0以上500以下
-                                    if 1.0 <= val <= 500:
-                                        odds_dict[umaban] = val
-                                        break
-                    except (ValueError, IndexError):
-                        continue
+            # 馬名リストが渡されていて、ページの馬名と一致するか確認
+            is_correct_race = True
+            if horse_names and page_horse_names:
+                # 少なくとも1頭が一致するか確認
+                is_correct_race = any(name in page_horse_names for name in horse_names[:3])
 
-            # 別のパターン: Odds_Tableクラス
-            for table in soup.find_all('table', class_=re.compile(r'Odds', re.I)):
-                for tr in table.find_all('tr'):
+            if is_correct_race and page_horse_names:
+                # オッズテーブルから取得
+                for tr in soup.find_all('tr'):
                     tds = tr.find_all('td')
-                    for i, td in enumerate(tds):
-                        text = td.get_text(strip=True)
-                        if text.isdigit() and 1 <= int(text) <= 18:
-                            umaban = int(text)
-                            # 次のtdからオッズを探す
-                            for next_td in tds[i+1:]:
-                                next_text = next_td.get_text(strip=True)
-                                odds_match = re.match(r'^(\d+\.?\d*)$', next_text)
-                                if odds_match:
-                                    val = float(odds_match.group(1))
-                                    if 1.0 <= val <= 500 and umaban not in odds_dict:
-                                        odds_dict[umaban] = val
-                                        break
-                            break
+                    if len(tds) >= 4:
+                        try:
+                            umaban_text = tds[1].get_text(strip=True)
+                            if umaban_text.isdigit() and 1 <= int(umaban_text) <= 18:
+                                umaban = int(umaban_text)
+                                for td in reversed(tds):
+                                    text = td.get_text(strip=True)
+                                    odds_match = re.match(r'^(\d+\.?\d*)$', text)
+                                    if odds_match:
+                                        val = float(odds_match.group(1))
+                                        if 1.0 <= val <= 500:
+                                            odds_dict[umaban] = val
+                                            break
+                        except (ValueError, IndexError):
+                            continue
+
+                if odds_dict:
+                    return odds_dict
+        except Exception as e:
+            print(f'Odds page error: {e}')
+
+        # オッズページから取得できなかった場合、結果ページから払戻金を取得
+        result_url = f"{self.BASE_URL}/race/result.html?race_id={race_id}"
+        try:
+            soup = self._fetch(result_url)
+
+            # 払戻金テーブルから単勝を取得
+            # 「単勝」の行を探す
+            payout_table = soup.find('table', class_='Payout_Detail_Table')
+            if payout_table:
+                for tr in payout_table.find_all('tr'):
+                    th = tr.find('th')
+                    if th and '単勝' in th.get_text():
+                        tds = tr.find_all('td')
+                        if len(tds) >= 2:
+                            # 馬番
+                            umaban_text = tds[0].get_text(strip=True)
+                            # 払戻金（例: "150円" → 1.5倍）
+                            payout_text = tds[1].get_text(strip=True)
+
+                            if umaban_text.isdigit():
+                                umaban = int(umaban_text)
+                                # 払戻金を抽出（"150円" or "1,500円"）
+                                payout_match = re.search(r'([\d,]+)', payout_text)
+                                if payout_match:
+                                    payout = int(payout_match.group(1).replace(',', ''))
+                                    # 払戻金 ÷ 100 = オッズ（100円購入時）
+                                    odds_dict[umaban] = payout / 100
+
+            # 別のパターン: ResultTable内のオッズ列
+            if not odds_dict:
+                result_table = soup.find('table', class_='ResultTable')
+                if result_table:
+                    for tr in result_table.find_all('tr'):
+                        tds = tr.find_all('td')
+                        if len(tds) >= 10:
+                            try:
+                                # 馬番は通常2列目
+                                umaban_td = tds[1] if len(tds) > 1 else None
+                                if umaban_td:
+                                    umaban_text = umaban_td.get_text(strip=True)
+                                    if umaban_text.isdigit():
+                                        umaban = int(umaban_text)
+                                        # 単勝オッズは最後の方の列
+                                        for td in reversed(tds):
+                                            text = td.get_text(strip=True)
+                                            # "1.5" or "(1.5)" パターン
+                                            odds_match = re.search(r'(\d+\.?\d*)', text)
+                                            if odds_match:
+                                                val = float(odds_match.group(1))
+                                                if 1.0 <= val <= 500:
+                                                    odds_dict[umaban] = val
+                                                    break
+                            except (ValueError, IndexError):
+                                continue
 
             return odds_dict
         except Exception as e:
-            print(f'Odds error: {e}')
+            print(f'Result page error: {e}')
             return {}
 
     def get_horse_history(self, horse_id: str):
@@ -504,8 +555,9 @@ def predict(request: PredictRequest):
         df = scraper.enrich_data(df)
         df = processor.process(df)
 
-        # オッズ取得
-        odds_dict = scraper.get_odds(rid)
+        # オッズ取得（馬名リストを渡して正しいレースか確認）
+        horse_names = df['horse_name'].tolist() if 'horse_name' in df.columns else []
+        odds_dict = scraper.get_odds(rid, horse_names)
 
         # 予測
         X = df[model_features].fillna(-1)
@@ -616,8 +668,9 @@ def predict_single_race(request: SingleRaceRequest):
     df = scraper.enrich_data(df)
     df = processor.process(df)
 
-    # オッズ取得
-    odds_dict = scraper.get_odds(race_id)
+    # オッズ取得（馬名リストを渡して正しいレースか確認）
+    horse_names = df['horse_name'].tolist() if 'horse_name' in df.columns else []
+    odds_dict = scraper.get_odds(race_id, horse_names)
 
     # 予測
     X = df[model_features].fillna(-1)
