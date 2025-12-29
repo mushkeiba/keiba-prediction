@@ -390,17 +390,11 @@ class NARScraper:
                 stats = self.get_horse_history(str(hid))
                 stats['horse_id'] = hid
                 horse_data.append(stats)
-                # デバッグ: 最初の馬の統計を確認
-                if len(horse_data) == 1:
-                    print(f"DEBUG first horse stats: {stats}")
             if horse_data:
                 hdf = pd.DataFrame(horse_data)
-                print(f"DEBUG hdf columns: {list(hdf.columns)}")
-                print(f"DEBUG hdf sample horse_win_rate: {hdf['horse_win_rate'].iloc[0] if len(hdf) > 0 else 'N/A'}")
                 df['horse_id'] = df['horse_id'].astype(str)
                 hdf['horse_id'] = hdf['horse_id'].astype(str)
                 df = df.merge(hdf, on='horse_id', how='left')
-                print(f"DEBUG after merge columns: {list(df.columns)}")
 
         if 'jockey_id' in df.columns:
             jockey_data = []
@@ -590,14 +584,6 @@ def predict(request: PredictRequest):
         distance = int(df['distance'].iloc[0]) if 'distance' in df.columns else 0
         start_time = df['start_time'].iloc[0] if 'start_time' in df.columns else ""
 
-        # デバッグ: DataFrameのカラムを確認
-        print(f"DEBUG columns: {list(df.columns)}")
-        if len(df) > 0:
-            sample_row = df.iloc[0]
-            print(f"DEBUG sample horse_win_rate: {sample_row.get('horse_win_rate')}")
-            print(f"DEBUG sample horse_show_rate: {sample_row.get('horse_show_rate')}")
-            print(f"DEBUG sample horse_runs: {sample_row.get('horse_runs')}")
-
         predictions = []
         for i, (_, row) in enumerate(df.iterrows()):  # 全馬を返す
             horse_num = int(row['horse_number']) if pd.notna(row.get('horse_number')) else 0
@@ -607,17 +593,6 @@ def predict(request: PredictRequest):
             # 勝率・複勝率を取得（0-1の範囲であるべき）
             raw_win_rate = float(row.get('horse_win_rate') or 0)
             raw_show_rate = float(row.get('horse_show_rate') or 0)
-
-            # デバッグ出力
-            if i == 0:
-                print(f"DEBUG row[0] win_rate raw: {raw_win_rate}, show_rate raw: {raw_show_rate}")
-
-            # 異常値チェック: 正常な勝率は0-1の範囲
-            # 1より大きい場合はデータ異常（horse_runsなどが混入）なので0にリセット
-            if raw_win_rate > 1 or raw_win_rate < 0:
-                raw_win_rate = 0
-            if raw_show_rate > 1 or raw_show_rate < 0:
-                raw_show_rate = 0
 
             win_rate = raw_win_rate * 100
             show_rate = raw_show_rate * 100
@@ -649,15 +624,6 @@ def predict(request: PredictRequest):
             "predictions": predictions
         })
 
-    # デバッグ情報を追加
-    debug_info = {}
-    if results and results[0].get('predictions'):
-        first_pred = results[0]['predictions'][0] if results[0]['predictions'] else {}
-        debug_info = {
-            "sample_raw_data": str(first_pred),
-            "columns_available": list(df.columns) if 'df' in dir() else []
-        }
-
     return {
         "track": {
             "code": track_code,
@@ -665,8 +631,7 @@ def predict(request: PredictRequest):
             "emoji": TRACKS[track_code]['emoji']
         },
         "date": request.date,
-        "races": results,
-        "debug": debug_info
+        "races": results
     }
 
 
@@ -749,18 +714,6 @@ def predict_single_race(request: SingleRaceRequest):
         # 勝率・複勝率を取得（0-1の範囲であるべき）
         raw_win_rate = float(row.get('horse_win_rate') or 0)
         raw_show_rate = float(row.get('horse_show_rate') or 0)
-
-        # デバッグ: 全馬の値を出力
-        print(f"DEBUG predict_single_race horse {horse_num}: raw_win={raw_win_rate}, raw_show={raw_show_rate}")
-
-        # 異常値チェック: 正常な勝率は0-1の範囲
-        # 1より大きい場合はデータ異常（horse_runsなどが混入）なので0にリセット
-        if raw_win_rate > 1 or raw_win_rate < 0:
-            print(f"DEBUG ABNORMAL win_rate detected: {raw_win_rate}")
-            raw_win_rate = 0
-        if raw_show_rate > 1 or raw_show_rate < 0:
-            print(f"DEBUG ABNORMAL show_rate detected: {raw_show_rate}")
-            raw_show_rate = 0
 
         win_rate = raw_win_rate * 100
         show_rate = raw_show_rate * 100
