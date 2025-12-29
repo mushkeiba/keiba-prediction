@@ -42,6 +42,9 @@ on:
           - update
         default: 'update'
 
+permissions:
+  contents: write
+
 jobs:
   train:
     runs-on: ubuntu-latest

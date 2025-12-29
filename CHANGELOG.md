@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 2025-12-30
+### 修正: GitHub Actions のpush権限エラー
+**問題**: `Permission denied to github-actions[bot]` でpushが失敗
+**原因**: workflowにリポジトリ書き込み権限がなかった
+**変更内容**:
+- `.github/workflows/train.yml` に `permissions: contents: write` を追加
+
 ## 2025-12-29
 ### 機能追加: 初回モデル作成 / 再学習モードの実装
 **変更内容**:
