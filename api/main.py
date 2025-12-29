@@ -538,6 +538,105 @@ def predict(request: PredictRequest):
     }
 
 
+class RaceListRequest(BaseModel):
+    track_code: str
+    date: str
+
+
+@app.post("/api/races")
+def get_race_list(request: RaceListRequest):
+    """レース一覧を取得（軽量）"""
+    track_code = request.track_code
+    date_str = request.date.replace("-", "")
+
+    if track_code not in TRACKS:
+        raise HTTPException(status_code=400, detail="無効な競馬場コード")
+
+    scraper = NARScraper(track_code, delay=0.3)
+    race_ids = scraper.get_race_list_by_date(date_str)
+
+    return {
+        "track": TRACKS[track_code],
+        "race_ids": sorted(race_ids)
+    }
+
+
+class SingleRaceRequest(BaseModel):
+    race_id: str
+    track_code: str
+
+
+@app.post("/api/predict/race")
+def predict_single_race(request: SingleRaceRequest):
+    """単一レースの予測"""
+    race_id = request.race_id
+    track_code = request.track_code
+
+    if track_code not in TRACKS:
+        raise HTTPException(status_code=400, detail="無効な競馬場コード")
+
+    model, model_features = load_model(track_code)
+    if model is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{TRACKS[track_code]['name']}のモデルがありません"
+        )
+
+    scraper = NARScraper(track_code, delay=0.3)
+    processor = Processor()
+
+    df = scraper.get_race_data(race_id)
+    if df is None:
+        raise HTTPException(status_code=404, detail="レースデータが取得できません")
+
+    df = scraper.enrich_data(df)
+    df = processor.process(df)
+
+    # オッズ取得
+    odds_dict = scraper.get_odds(race_id)
+
+    # 予測
+    X = df[model_features].fillna(-1)
+    df['prob'] = model.predict(X)
+    df['pred_rank'] = df['prob'].rank(ascending=False, method='min').astype(int)
+    df = df.sort_values('prob', ascending=False)
+
+    # レース情報
+    race_num = race_id[-2:]
+    race_name = df['race_name'].iloc[0] if 'race_name' in df.columns else f"{race_num}R"
+    distance = int(df['distance'].iloc[0]) if 'distance' in df.columns else 0
+    start_time = df['start_time'].iloc[0] if 'start_time' in df.columns else ""
+
+    predictions = []
+    for i, (_, row) in enumerate(df.head(3).iterrows()):
+        horse_num = int(row['horse_number']) if pd.notna(row.get('horse_number')) else 0
+        odds = odds_dict.get(horse_num, 0)
+        prob = float(row['prob'])
+        expected_value = prob * odds if odds > 0 else 0
+        is_value = expected_value > 1.0
+
+        predictions.append({
+            "rank": i + 1,
+            "number": horse_num,
+            "name": row.get('horse_name', '不明'),
+            "jockey": row.get('jockey_name', '不明'),
+            "prob": round(prob, 3),
+            "win_rate": round(float(row.get('horse_win_rate', 0)) * 100, 1),
+            "show_rate": round(float(row.get('horse_show_rate', 0)) * 100, 1),
+            "odds": odds,
+            "expected_value": round(expected_value, 2),
+            "is_value": is_value
+        })
+
+    return {
+        "id": race_num,
+        "name": race_name,
+        "distance": distance,
+        "time": start_time,
+        "predictions": predictions
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
