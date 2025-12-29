@@ -601,10 +601,10 @@ def predict(request: PredictRequest):
             win_rate = raw_win_rate * 100
             show_rate = raw_show_rate * 100
 
-            # 妙味計算: 予測確率 × オッズ > 1 なら妙味あり
-            # 例: 予測30% × オッズ5.0 = 1.5 → 期待値プラス
+            # 妙味計算: 予測確率 × オッズ > 1.5 なら狙い目
+            # 例: 予測30% × オッズ5.0 = 1.5 → ギリギリ狙い目
             expected_value = prob * odds if odds > 0 else 0
-            is_value = expected_value > 1.0  # 期待値1以上なら妙味あり
+            is_value = expected_value > 1.5  # 期待値1.5以上なら狙い目
 
             predictions.append({
                 "rank": i + 1,
@@ -723,7 +723,7 @@ def predict_single_race(request: SingleRaceRequest):
         show_rate = raw_show_rate * 100
 
         expected_value = prob * odds if odds > 0 else 0
-        is_value = expected_value > 1.0
+        is_value = expected_value > 1.5  # 期待値1.5以上なら狙い目
 
         predictions.append({
             "rank": i + 1,
