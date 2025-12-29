@@ -179,10 +179,40 @@ class NARScraper:
             print(f'Error: {e}')
 
     def get_odds(self, race_id: str, horse_names: list = None) -> dict:
-        """単勝オッズを取得（開催中はオッズページ、終了後はスマホ版結果ページから）"""
+        """単勝オッズを取得（複数ソースから試行）"""
         odds_dict = {}
 
-        # まずオッズページから取得を試みる（開催中のレース用）
+        # 1. 出馬表ページからオッズを取得（最も確実）
+        shutuba_url = f"{self.BASE_URL}/race/shutuba.html?race_id={race_id}"
+        try:
+            soup = self._fetch(shutuba_url)
+            table = soup.find('table', class_='ShutubaTable')
+            if not table:
+                table = soup.find('table', class_='RaceTable01')
+            if table:
+                for tr in table.find_all('tr'):
+                    tds = tr.find_all('td')
+                    if len(tds) >= 2:
+                        # 馬番を取得（2番目のtd）
+                        umaban_text = tds[1].get_text(strip=True) if len(tds) > 1 else ""
+                        if umaban_text.isdigit() and 1 <= int(umaban_text) <= 18:
+                            umaban = int(umaban_text)
+                            # オッズを探す（Popular列やOdds列）
+                            for td in tds:
+                                text = td.get_text(strip=True)
+                                # "1.5" や "12.3" などのオッズ形式
+                                odds_match = re.search(r'^(\d+\.\d)$', text)
+                                if odds_match:
+                                    val = float(odds_match.group(1))
+                                    if 1.0 <= val <= 999.9:
+                                        odds_dict[umaban] = val
+                                        break
+            if odds_dict:
+                return odds_dict
+        except Exception as e:
+            print(f'Shutuba page error: {e}')
+
+        # 2. オッズページから取得（開催中のレース用）
         url = f"{self.BASE_URL}/odds/odds_get_form.html?race_id={race_id}&type=b1"
         try:
             soup = self._fetch(url, encoding='UTF-8')
@@ -585,7 +615,7 @@ def predict(request: PredictRequest):
         start_time = df['start_time'].iloc[0] if 'start_time' in df.columns else ""
 
         predictions = []
-        for i, (_, row) in enumerate(df.head(3).iterrows()):
+        for i, (_, row) in enumerate(df.iterrows()):  # 全馬を返す
             horse_num = int(row['horse_number']) if pd.notna(row.get('horse_number')) else 0
             odds = odds_dict.get(horse_num, 0)
             prob = float(row['prob'])
@@ -613,6 +643,7 @@ def predict(request: PredictRequest):
             "name": race_name,
             "distance": distance,
             "time": start_time,
+            "field_size": len(df),  # 出走頭数を追加
             "predictions": predictions
         })
 
@@ -698,7 +729,7 @@ def predict_single_race(request: SingleRaceRequest):
     start_time = df['start_time'].iloc[0] if 'start_time' in df.columns else ""
 
     predictions = []
-    for i, (_, row) in enumerate(df.head(3).iterrows()):
+    for i, (_, row) in enumerate(df.iterrows()):  # 全馬を返す
         horse_num = int(row['horse_number']) if pd.notna(row.get('horse_number')) else 0
         odds = odds_dict.get(horse_num, 0)
         prob = float(row['prob'])
@@ -723,6 +754,7 @@ def predict_single_race(request: SingleRaceRequest):
         "name": race_name,
         "distance": distance,
         "time": start_time,
+        "field_size": len(df),
         "predictions": predictions
     }
 
