@@ -298,11 +298,14 @@ class NARScraper:
                 table = tables[1]
                 for tr in table.find_all('tr'):
                     tds = tr.find_all('td')
-                    if len(tds) >= 6:
+                    # td数は5個（馬番, 馬番, 空, 馬名, オッズ）
+                    if len(tds) >= 5:
                         umaban_text = tds[0].get_text(strip=True)
                         if umaban_text.isdigit():
                             umaban = int(umaban_text)
+                            # オッズは最後のtd
                             odds_text = tds[-1].get_text(strip=True)
+                            # 「1.4 - 2.6」形式をパース
                             odds_match = re.search(r'(\d+\.?\d*)\s*-\s*(\d+\.?\d*)', odds_text)
                             if odds_match:
                                 min_odds = float(odds_match.group(1))
@@ -313,6 +316,7 @@ class NARScraper:
                                     'avg': round((min_odds + max_odds) / 2, 2)
                                 }
                             else:
+                                # 単一の数値の場合
                                 single_match = re.search(r'(\d+\.?\d*)', odds_text)
                                 if single_match:
                                     odds_val = float(single_match.group(1))
