@@ -298,9 +298,9 @@ class NARScraper:
                 table = tables[1]
                 for tr in table.find_all('tr'):
                     tds = tr.find_all('td')
-                    # td数は5個（馬番, 馬番, 空, 馬名, オッズ）
+                    # td構造: [枠番, 馬番, 空, 馬名, オッズ]
                     if len(tds) >= 5:
-                        umaban_text = tds[0].get_text(strip=True)
+                        umaban_text = tds[1].get_text(strip=True)  # td[1]が馬番
                         if umaban_text.isdigit():
                             umaban = int(umaban_text)
                             # オッズは最後のtd
