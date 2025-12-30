@@ -94,9 +94,10 @@ class NARScraper:
             info = {'race_id': race_id}
 
             # 日付を抽出（race_idから）
-            # race_id形式: YYYYMMJJRRNN (年月日+競馬場+レース番号)
-            if len(race_id) >= 8:
-                info['race_date'] = race_id[:8]
+            # race_id形式: YYYYJJMMDDNN (年+競馬場+月日+レース番号)
+            # 例: 202544123001 → 2025年12月30日、大井(44)、01R
+            if len(race_id) >= 10:
+                info['race_date'] = race_id[:4] + race_id[6:10]  # YYYY + MMDD
 
             nm = soup.find('h1', class_='RaceName')
             if nm:
