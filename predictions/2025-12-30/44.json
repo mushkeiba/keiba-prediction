@@ -1,0 +1,1552 @@
+{
+  "track": {
+    "code": "44",
+    "name": "大井",
+    "emoji": "🏟️"
+  },
+  "generated_at": "2025-12-30T05:36:26.038619",
+  "races": [
+    {
+      "id": "01",
+      "race_id": "202544123001",
+      "name": "01R",
+      "distance": 1600,
+      "time": "11:00",
+      "field_size": 11,
+      "predictions": [
+        {
+          "rank": 1,
+          "number": 10,
+          "name": "ダノンクルーザー",
+          "jockey": "安藤洋一",
+          "prob": 0.576,
+          "win_rate": 100.0,
+          "show_rate": 100.0
+        },
+        {
+          "rank": 2,
+          "number": 9,
+          "name": "バレアレス",
+          "jockey": "矢野貴之",
+          "prob": 0.376,
+          "win_rate": 14.3,
+          "show_rate": 71.4
+        },
+        {
+          "rank": 3,
+          "number": 4,
+          "name": "レイヴンマスター",
+          "jockey": "石川駿介",
+          "prob": 0.342,
+          "win_rate": 12.5,
+          "show_rate": 62.5
+        },
+        {
+          "rank": 4,
+          "number": 3,
+          "name": "アイトカコイトカ",
+          "jockey": "横川怜央",
+          "prob": 0.218,
+          "win_rate": 7.7,
+          "show_rate": 30.8
+        },
+        {
+          "rank": 5,
+          "number": 1,
+          "name": "ジャックポット",
+          "jockey": "野畑凌",
+          "prob": 0.181,
+          "win_rate": 57.1,
+          "show_rate": 85.7
+        },
+        {
+          "rank": 6,
+          "number": 11,
+          "name": "シャンクドール",
+          "jockey": "杉山海波",
+          "prob": 0.129,
+          "win_rate": 50.0,
+          "show_rate": 62.5
+        },
+        {
+          "rank": 7,
+          "number": 7,
+          "name": "ヴィクストリア",
+          "jockey": "桑村真明",
+          "prob": 0.102,
+          "win_rate": 42.9,
+          "show_rate": 57.1
+        },
+        {
+          "rank": 8,
+          "number": 5,
+          "name": "ミユンガー",
+          "jockey": "本田正重",
+          "prob": 0.09,
+          "win_rate": 42.9,
+          "show_rate": 78.6
+        },
+        {
+          "rank": 9,
+          "number": 2,
+          "name": "イサゴールド",
+          "jockey": "東原悠善",
+          "prob": 0.088,
+          "win_rate": 30.0,
+          "show_rate": 50.0
+        },
+        {
+          "rank": 10,
+          "number": 6,
+          "name": "ソプラノタッチ",
+          "jockey": "田中洸多",
+          "prob": 0.078,
+          "win_rate": 0.0,
+          "show_rate": 71.4
+        },
+        {
+          "rank": 11,
+          "number": 8,
+          "name": "サブノルアナ",
+          "jockey": "藤本現暉",
+          "prob": 0.064,
+          "win_rate": 25.0,
+          "show_rate": 87.5
+        }
+      ]
+    },
+    {
+      "id": "02",
+      "race_id": "202544123002",
+      "name": "02R",
+      "distance": 1200,
+      "time": "11:35",
+      "field_size": 16,
+      "predictions": [
+        {
+          "rank": 1,
+          "number": 1,
+          "name": "アドリビタム",
+          "jockey": "高野誠毅",
+          "prob": 0.728,
+          "win_rate": 0.0,
+          "show_rate": 50.0
+        },
+        {
+          "rank": 2,
+          "number": 3,
+          "name": "リバイブメイラード",
+          "jockey": "瀬川将輝",
+          "prob": 0.583,
+          "win_rate": 50.0,
+          "show_rate": 100.0
+        },
+        {
+          "rank": 3,
+          "number": 7,
+          "name": "マルカンプレスト",
+          "jockey": "江里口裕",
+          "prob": 0.337,
+          "win_rate": 0.0,
+          "show_rate": 66.7
+        },
+        {
+          "rank": 4,
+          "number": 8,
+          "name": "プラウドメアリー",
+          "jockey": "藤本現暉",
+          "prob": 0.303,
+          "win_rate": 20.0,
+          "show_rate": 60.0
+        },
+        {
+          "rank": 5,
+          "number": 2,
+          "name": "リュウグウノユメ",
+          "jockey": "野畑凌",
+          "prob": 0.269,
+          "win_rate": 14.3,
+          "show_rate": 57.1
+        },
+        {
+          "rank": 6,
+          "number": 12,
+          "name": "アウスラフラッグ",
+          "jockey": "藤田凌",
+          "prob": 0.257,
+          "win_rate": 9.1,
+          "show_rate": 45.5
+        },
+        {
+          "rank": 7,
+          "number": 6,
+          "name": "ラッキークラウン",
+          "jockey": "矢野貴之",
+          "prob": 0.194,
+          "win_rate": 0.0,
+          "show_rate": 66.7
+        },
+        {
+          "rank": 8,
+          "number": 16,
+          "name": "ソリタリオカズ",
+          "jockey": "谷内貫太",
+          "prob": 0.152,
+          "win_rate": 10.0,
+          "show_rate": 60.0
+        },
+        {
+          "rank": 9,
+          "number": 13,
+          "name": "バリアシオン",
+          "jockey": "岡村健司",
+          "prob": 0.06,
+          "win_rate": 25.0,
+          "show_rate": 37.5
+        },
+        {
+          "rank": 10,
+          "number": 4,
+          "name": "ウルフスタンド",
+          "jockey": "西啓太",
+          "prob": 0.053,
+          "win_rate": 6.2,
+          "show_rate": 50.0
+        },
+        {
+          "rank": 11,
+          "number": 15,
+          "name": "リケアドアーズ",
+          "jockey": "横川怜央",
+          "prob": 0.04,
+          "win_rate": 28.6,
+          "show_rate": 57.1
+        },
+        {
+          "rank": 12,
+          "number": 5,
+          "name": "アデニウム",
+          "jockey": "小野俊斗",
+          "prob": 0.037,
+          "win_rate": 10.0,
+          "show_rate": 40.0
+        },
+        {
+          "rank": 13,
+          "number": 9,
+          "name": "マジカルレインボー",
+          "jockey": "鷹見陸",
+          "prob": 0.035,
+          "win_rate": 46.2,
+          "show_rate": 69.2
+        },
+        {
+          "rank": 14,
+          "number": 11,
+          "name": "レナ",
+          "jockey": "佐野遥久",
+          "prob": 0.02,
+          "win_rate": 23.5,
+          "show_rate": 64.7
+        },
+        {
+          "rank": 15,
+          "number": 10,
+          "name": "ハルウララカ",
+          "jockey": "吉原寛人",
+          "prob": 0.017,
+          "win_rate": 15.0,
+          "show_rate": 50.0
+        },
+        {
+          "rank": 16,
+          "number": 14,
+          "name": "ライウ",
+          "jockey": "保園翔也",
+          "prob": 0.014,
+          "win_rate": 0.0,
+          "show_rate": 42.9
+        }
+      ]
+    },
+    {
+      "id": "03",
+      "race_id": "202544123003",
+      "name": "03R",
+      "distance": 1600,
+      "time": "12:10",
+      "field_size": 8,
+      "predictions": [
+        {
+          "rank": 1,
+          "number": 6,
+          "name": "エクセレンティ",
+          "jockey": "安藤洋一",
+          "prob": 0.607,
+          "win_rate": 0.0,
+          "show_rate": 50.0
+        },
+        {
+          "rank": 2,
+          "number": 7,
+          "name": "アストラルゲート",
+          "jockey": "岡村健司",
+          "prob": 0.516,
+          "win_rate": 0.0,
+          "show_rate": 33.3
+        },
+        {
+          "rank": 3,
+          "number": 1,
+          "name": "ルビーシールズ",
+          "jockey": "鷹見陸",
+          "prob": 0.514,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 4,
+          "number": 4,
+          "name": "グランマローネ",
+          "jockey": "藤本現暉",
+          "prob": 0.473,
+          "win_rate": 0.0,
+          "show_rate": 100.0
+        },
+        {
+          "rank": 5,
+          "number": 8,
+          "name": "ワイルドノブクン",
+          "jockey": "中山遥人",
+          "prob": 0.394,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 6,
+          "number": 3,
+          "name": "ブイスリー",
+          "jockey": "和田譲治",
+          "prob": 0.356,
+          "win_rate": 0.0,
+          "show_rate": 33.3
+        },
+        {
+          "rank": 7,
+          "number": 2,
+          "name": "トゥーナウィッシュ",
+          "jockey": "桑村真明",
+          "prob": 0.327,
+          "win_rate": 0.0,
+          "show_rate": 25.0
+        },
+        {
+          "rank": 8,
+          "number": 5,
+          "name": "カンタベリータイム",
+          "jockey": "佐野遥久",
+          "prob": 0.171,
+          "win_rate": 0.0,
+          "show_rate": 33.3
+        }
+      ]
+    },
+    {
+      "id": "04",
+      "race_id": "202544123004",
+      "name": "04R",
+      "distance": 1200,
+      "time": "12:45",
+      "field_size": 11,
+      "predictions": [
+        {
+          "rank": 1,
+          "number": 10,
+          "name": "コンシール",
+          "jockey": "安藤洋一",
+          "prob": 0.761,
+          "win_rate": 0.0,
+          "show_rate": 40.0
+        },
+        {
+          "rank": 2,
+          "number": 4,
+          "name": "ハクアイストーリー",
+          "jockey": "吉井章",
+          "prob": 0.759,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 3,
+          "number": 6,
+          "name": "デンテブリランテ",
+          "jockey": "藤田凌",
+          "prob": 0.748,
+          "win_rate": 0.0,
+          "show_rate": 33.3
+        },
+        {
+          "rank": 4,
+          "number": 2,
+          "name": "ミライヘノヒーロー",
+          "jockey": "和田譲治",
+          "prob": 0.724,
+          "win_rate": 0.0,
+          "show_rate": 22.2
+        },
+        {
+          "rank": 5,
+          "number": 5,
+          "name": "リクコウ",
+          "jockey": "高橋昭平",
+          "prob": 0.301,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 6,
+          "number": 7,
+          "name": "バブリーショーコー",
+          "jockey": "笹川翼",
+          "prob": 0.276,
+          "win_rate": 0.0,
+          "show_rate": 25.0
+        },
+        {
+          "rank": 7,
+          "number": 3,
+          "name": "ノーブルオーディン",
+          "jockey": "西啓太",
+          "prob": 0.227,
+          "win_rate": 0.0,
+          "show_rate": 50.0
+        },
+        {
+          "rank": 8,
+          "number": 8,
+          "name": "スリーバンカーズ",
+          "jockey": "本田正重",
+          "prob": 0.181,
+          "win_rate": 0.0,
+          "show_rate": 80.0
+        },
+        {
+          "rank": 9,
+          "number": 9,
+          "name": "ベストサイレンス",
+          "jockey": "桑村真明",
+          "prob": 0.181,
+          "win_rate": 0.0,
+          "show_rate": 12.5
+        },
+        {
+          "rank": 10,
+          "number": 11,
+          "name": "コンチナッツ",
+          "jockey": "千田洋",
+          "prob": 0.129,
+          "win_rate": 7.7,
+          "show_rate": 53.8
+        },
+        {
+          "rank": 11,
+          "number": 1,
+          "name": "ラブリーファンク",
+          "jockey": "杉山海波",
+          "prob": 0.085,
+          "win_rate": 25.0,
+          "show_rate": 100.0
+        }
+      ]
+    },
+    {
+      "id": "05",
+      "race_id": "202544123005",
+      "name": "05R",
+      "distance": 1600,
+      "time": "13:20",
+      "field_size": 13,
+      "predictions": [
+        {
+          "rank": 1,
+          "number": 12,
+          "name": "スリーレジェンド",
+          "jockey": "笹川翼",
+          "prob": 0.584,
+          "win_rate": 7.1,
+          "show_rate": 21.4
+        },
+        {
+          "rank": 2,
+          "number": 6,
+          "name": "アダマスネロ",
+          "jockey": "佐野遥久",
+          "prob": 0.343,
+          "win_rate": 0.0,
+          "show_rate": 20.0
+        },
+        {
+          "rank": 3,
+          "number": 2,
+          "name": "ソレエスピアージャ",
+          "jockey": "矢野貴之",
+          "prob": 0.305,
+          "win_rate": 0.0,
+          "show_rate": 16.7
+        },
+        {
+          "rank": 4,
+          "number": 4,
+          "name": "フローラルデザイン",
+          "jockey": "安藤洋一",
+          "prob": 0.273,
+          "win_rate": 25.0,
+          "show_rate": 62.5
+        },
+        {
+          "rank": 5,
+          "number": 7,
+          "name": "ハクアイソレイユ",
+          "jockey": "吉井章",
+          "prob": 0.265,
+          "win_rate": 0.0,
+          "show_rate": 66.7
+        },
+        {
+          "rank": 6,
+          "number": 5,
+          "name": "リコーファルコン",
+          "jockey": "和田譲治",
+          "prob": 0.246,
+          "win_rate": 10.0,
+          "show_rate": 55.0
+        },
+        {
+          "rank": 7,
+          "number": 10,
+          "name": "サンバフレイバー",
+          "jockey": "野畑凌",
+          "prob": 0.221,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 8,
+          "number": 8,
+          "name": "ナデナデ",
+          "jockey": "本田正重",
+          "prob": 0.211,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 9,
+          "number": 11,
+          "name": "アンタンシオン",
+          "jockey": "吉原寛人",
+          "prob": 0.156,
+          "win_rate": 25.0,
+          "show_rate": 87.5
+        },
+        {
+          "rank": 10,
+          "number": 13,
+          "name": "ケンオーシャン",
+          "jockey": "藤本現暉",
+          "prob": 0.152,
+          "win_rate": 10.5,
+          "show_rate": 36.8
+        },
+        {
+          "rank": 11,
+          "number": 1,
+          "name": "ブレスト",
+          "jockey": "遠藤健太",
+          "prob": 0.116,
+          "win_rate": 28.6,
+          "show_rate": 64.3
+        },
+        {
+          "rank": 12,
+          "number": 3,
+          "name": "ユイノサンバンカン",
+          "jockey": "東原悠善",
+          "prob": 0.094,
+          "win_rate": 5.0,
+          "show_rate": 10.0
+        },
+        {
+          "rank": 13,
+          "number": 9,
+          "name": "ティーズリンク",
+          "jockey": "中山遥人",
+          "prob": 0.04,
+          "win_rate": 5.3,
+          "show_rate": 21.1
+        }
+      ]
+    },
+    {
+      "id": "06",
+      "race_id": "202544123006",
+      "name": "06R",
+      "distance": 1200,
+      "time": "13:55",
+      "field_size": 14,
+      "predictions": [
+        {
+          "rank": 1,
+          "number": 14,
+          "name": "ハーレムシャフル",
+          "jockey": "野畑凌",
+          "prob": 0.601,
+          "win_rate": 20.0,
+          "show_rate": 60.0
+        },
+        {
+          "rank": 2,
+          "number": 11,
+          "name": "リンダポッケ",
+          "jockey": "矢野貴之",
+          "prob": 0.577,
+          "win_rate": 35.3,
+          "show_rate": 58.8
+        },
+        {
+          "rank": 3,
+          "number": 2,
+          "name": "ロイヤルエピック",
+          "jockey": "笹川翼",
+          "prob": 0.434,
+          "win_rate": 0.0,
+          "show_rate": 10.0
+        },
+        {
+          "rank": 4,
+          "number": 9,
+          "name": "ポアゾンノアール",
+          "jockey": "山中悠希",
+          "prob": 0.364,
+          "win_rate": 0.0,
+          "show_rate": 33.3
+        },
+        {
+          "rank": 5,
+          "number": 7,
+          "name": "ナムラミック",
+          "jockey": "和田譲治",
+          "prob": 0.27,
+          "win_rate": 10.0,
+          "show_rate": 35.0
+        },
+        {
+          "rank": 6,
+          "number": 10,
+          "name": "ブルーリベリュール",
+          "jockey": "藤田凌",
+          "prob": 0.242,
+          "win_rate": 6.7,
+          "show_rate": 26.7
+        },
+        {
+          "rank": 7,
+          "number": 3,
+          "name": "カッタラキマセン",
+          "jockey": "吉原寛人",
+          "prob": 0.238,
+          "win_rate": 14.3,
+          "show_rate": 28.6
+        },
+        {
+          "rank": 8,
+          "number": 12,
+          "name": "ストライクルックス",
+          "jockey": "西啓太",
+          "prob": 0.228,
+          "win_rate": 0.0,
+          "show_rate": 31.2
+        },
+        {
+          "rank": 9,
+          "number": 4,
+          "name": "ビックバンブー",
+          "jockey": "鷹見陸",
+          "prob": 0.197,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 10,
+          "number": 5,
+          "name": "レモンアイカー",
+          "jockey": "新原周馬",
+          "prob": 0.172,
+          "win_rate": 0.0,
+          "show_rate": 15.0
+        },
+        {
+          "rank": 11,
+          "number": 6,
+          "name": "ゼーブルージュ",
+          "jockey": "仲原大生",
+          "prob": 0.168,
+          "win_rate": 0.0,
+          "show_rate": 33.3
+        },
+        {
+          "rank": 12,
+          "number": 8,
+          "name": "マジックタイプ",
+          "jockey": "達城龍次",
+          "prob": 0.138,
+          "win_rate": 5.9,
+          "show_rate": 41.2
+        },
+        {
+          "rank": 13,
+          "number": 13,
+          "name": "チートメジャー",
+          "jockey": "谷内貫太",
+          "prob": 0.131,
+          "win_rate": 7.7,
+          "show_rate": 46.2
+        },
+        {
+          "rank": 14,
+          "number": 1,
+          "name": "フローズンキス",
+          "jockey": "澤田龍哉",
+          "prob": 0.112,
+          "win_rate": 0.0,
+          "show_rate": 33.3
+        }
+      ]
+    },
+    {
+      "id": "07",
+      "race_id": "202544123007",
+      "name": "07R",
+      "distance": 1600,
+      "time": "14:30",
+      "field_size": 14,
+      "predictions": [
+        {
+          "rank": 1,
+          "number": 11,
+          "name": "グロワールスカイ",
+          "jockey": "矢野貴之",
+          "prob": 0.472,
+          "win_rate": 25.0,
+          "show_rate": 58.3
+        },
+        {
+          "rank": 2,
+          "number": 4,
+          "name": "アルミンテソーロ",
+          "jockey": "藤田凌",
+          "prob": 0.444,
+          "win_rate": 33.3,
+          "show_rate": 66.7
+        },
+        {
+          "rank": 3,
+          "number": 2,
+          "name": "サンサンラルーナ",
+          "jockey": "東原悠善",
+          "prob": 0.288,
+          "win_rate": 7.1,
+          "show_rate": 14.3
+        },
+        {
+          "rank": 4,
+          "number": 7,
+          "name": "カセノマウンティン",
+          "jockey": "仲原大生",
+          "prob": 0.262,
+          "win_rate": 7.7,
+          "show_rate": 38.5
+        },
+        {
+          "rank": 5,
+          "number": 12,
+          "name": "ナンセイコウタロー",
+          "jockey": "吉井章",
+          "prob": 0.252,
+          "win_rate": 14.3,
+          "show_rate": 42.9
+        },
+        {
+          "rank": 6,
+          "number": 14,
+          "name": "ファーストメイト",
+          "jockey": "吉原寛人",
+          "prob": 0.199,
+          "win_rate": 15.0,
+          "show_rate": 30.0
+        },
+        {
+          "rank": 7,
+          "number": 8,
+          "name": "ウータンビート",
+          "jockey": "笹川翼",
+          "prob": 0.175,
+          "win_rate": 0.0,
+          "show_rate": 35.7
+        },
+        {
+          "rank": 8,
+          "number": 3,
+          "name": "カレーウドン",
+          "jockey": "桑村真明",
+          "prob": 0.166,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 9,
+          "number": 9,
+          "name": "グッドルックス",
+          "jockey": "本村直樹",
+          "prob": 0.14,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 10,
+          "number": 13,
+          "name": "シンアルマトゥラ",
+          "jockey": "石川駿介",
+          "prob": 0.136,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 11,
+          "number": 6,
+          "name": "ファーストフォルテ",
+          "jockey": "藤本現暉",
+          "prob": 0.133,
+          "win_rate": 10.0,
+          "show_rate": 25.0
+        },
+        {
+          "rank": 12,
+          "number": 1,
+          "name": "コーゲンマース",
+          "jockey": "千田洋",
+          "prob": 0.122,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 13,
+          "number": 5,
+          "name": "バーストオブカラー",
+          "jockey": "中山遥人",
+          "prob": 0.098,
+          "win_rate": 0.0,
+          "show_rate": 5.0
+        },
+        {
+          "rank": 14,
+          "number": 10,
+          "name": "ドナアフロディテ",
+          "jockey": "安藤洋一",
+          "prob": 0.082,
+          "win_rate": 5.0,
+          "show_rate": 20.0
+        }
+      ]
+    },
+    {
+      "id": "08",
+      "race_id": "202544123008",
+      "name": "08R",
+      "distance": 1400,
+      "time": "15:05",
+      "field_size": 14,
+      "predictions": [
+        {
+          "rank": 1,
+          "number": 2,
+          "name": "ユニヴェール",
+          "jockey": "吉井章",
+          "prob": 0.505,
+          "win_rate": 6.7,
+          "show_rate": 6.7
+        },
+        {
+          "rank": 2,
+          "number": 11,
+          "name": "オールズフェア",
+          "jockey": "西啓太",
+          "prob": 0.388,
+          "win_rate": 20.0,
+          "show_rate": 35.0
+        },
+        {
+          "rank": 3,
+          "number": 9,
+          "name": "クリティカルヒット",
+          "jockey": "和田譲治",
+          "prob": 0.27,
+          "win_rate": 7.1,
+          "show_rate": 28.6
+        },
+        {
+          "rank": 4,
+          "number": 8,
+          "name": "トーケンサワー",
+          "jockey": "千田洋",
+          "prob": 0.259,
+          "win_rate": 27.3,
+          "show_rate": 63.6
+        },
+        {
+          "rank": 5,
+          "number": 10,
+          "name": "ベイステート",
+          "jockey": "谷内貫太",
+          "prob": 0.208,
+          "win_rate": 0.0,
+          "show_rate": 10.0
+        },
+        {
+          "rank": 6,
+          "number": 6,
+          "name": "ファサード",
+          "jockey": "藤本現暉",
+          "prob": 0.185,
+          "win_rate": 0.0,
+          "show_rate": 5.0
+        },
+        {
+          "rank": 7,
+          "number": 3,
+          "name": "マイネルサンテ",
+          "jockey": "鷹見陸",
+          "prob": 0.182,
+          "win_rate": 0.0,
+          "show_rate": 5.0
+        },
+        {
+          "rank": 8,
+          "number": 12,
+          "name": "スズノハマヤ",
+          "jockey": "吉原寛人",
+          "prob": 0.174,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 9,
+          "number": 14,
+          "name": "ヴィジブルライト",
+          "jockey": "本田正重",
+          "prob": 0.172,
+          "win_rate": 11.1,
+          "show_rate": 66.7
+        },
+        {
+          "rank": 10,
+          "number": 4,
+          "name": "ベルボールドナイン",
+          "jockey": "桑村真明",
+          "prob": 0.171,
+          "win_rate": 0.0,
+          "show_rate": 5.0
+        },
+        {
+          "rank": 11,
+          "number": 1,
+          "name": "ラインガーラ",
+          "jockey": "達城龍次",
+          "prob": 0.163,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 12,
+          "number": 7,
+          "name": "ゼイトク",
+          "jockey": "江里口裕",
+          "prob": 0.151,
+          "win_rate": 0.0,
+          "show_rate": 25.0
+        },
+        {
+          "rank": 13,
+          "number": 13,
+          "name": "スペイスフォース",
+          "jockey": "安藤洋一",
+          "prob": 0.118,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 14,
+          "number": 5,
+          "name": "バジルフレイバー",
+          "jockey": "東原悠善",
+          "prob": 0.096,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        }
+      ]
+    },
+    {
+      "id": "09",
+      "race_id": "202544123009",
+      "name": "09R",
+      "distance": 1200,
+      "time": "15:45",
+      "field_size": 12,
+      "predictions": [
+        {
+          "rank": 1,
+          "number": 10,
+          "name": "ジーティーゴッド",
+          "jockey": "笹川翼",
+          "prob": 0.598,
+          "win_rate": 0.0,
+          "show_rate": 18.2
+        },
+        {
+          "rank": 2,
+          "number": 4,
+          "name": "パワーキングダム",
+          "jockey": "吉井章",
+          "prob": 0.399,
+          "win_rate": 0.0,
+          "show_rate": 20.0
+        },
+        {
+          "rank": 3,
+          "number": 7,
+          "name": "メイショウカンムリ",
+          "jockey": "濱田達也",
+          "prob": 0.377,
+          "win_rate": 10.0,
+          "show_rate": 20.0
+        },
+        {
+          "rank": 4,
+          "number": 2,
+          "name": "ミネソタ",
+          "jockey": "千田洋",
+          "prob": 0.372,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 5,
+          "number": 9,
+          "name": "エーオ",
+          "jockey": "川島正太",
+          "prob": 0.32,
+          "win_rate": 16.7,
+          "show_rate": 50.0
+        },
+        {
+          "rank": 6,
+          "number": 1,
+          "name": "バースフラワー",
+          "jockey": "藤田凌",
+          "prob": 0.279,
+          "win_rate": 22.2,
+          "show_rate": 66.7
+        },
+        {
+          "rank": 7,
+          "number": 12,
+          "name": "マルヨジョーダン",
+          "jockey": "野畑凌",
+          "prob": 0.202,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 8,
+          "number": 8,
+          "name": "ロードヴェスパー",
+          "jockey": "木間塚龍",
+          "prob": 0.197,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 9,
+          "number": 3,
+          "name": "アフターレヴュー",
+          "jockey": "佐野遥久",
+          "prob": 0.19,
+          "win_rate": 0.0,
+          "show_rate": 15.0
+        },
+        {
+          "rank": 10,
+          "number": 11,
+          "name": "マドモアゼルレンヌ",
+          "jockey": "鷹見陸",
+          "prob": 0.179,
+          "win_rate": 0.0,
+          "show_rate": 15.0
+        },
+        {
+          "rank": 11,
+          "number": 5,
+          "name": "エルロロ",
+          "jockey": "和田譲治",
+          "prob": 0.156,
+          "win_rate": 5.0,
+          "show_rate": 15.0
+        },
+        {
+          "rank": 12,
+          "number": 6,
+          "name": "アトラスライズ",
+          "jockey": "安藤洋一",
+          "prob": 0.118,
+          "win_rate": 0.0,
+          "show_rate": 10.0
+        }
+      ]
+    },
+    {
+      "id": "10",
+      "race_id": "202544123010",
+      "name": "10R",
+      "distance": 1600,
+      "time": "16:30",
+      "field_size": 16,
+      "predictions": [
+        {
+          "rank": 1,
+          "number": 12,
+          "name": "プラウドフレール",
+          "jockey": "張田昂",
+          "prob": 0.411,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 2,
+          "number": 2,
+          "name": "キャプテンネキ",
+          "jockey": "御神本訓",
+          "prob": 0.304,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 3,
+          "number": 9,
+          "name": "ツーシャドー",
+          "jockey": "山中悠希",
+          "prob": 0.291,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 4,
+          "number": 6,
+          "name": "ヘニータイフーン",
+          "jockey": "吉原寛人",
+          "prob": 0.278,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 5,
+          "number": 14,
+          "name": "ジゼル",
+          "jockey": "本橋孝太",
+          "prob": 0.277,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 6,
+          "number": 4,
+          "name": "オメガシンフォニー",
+          "jockey": "本田正重",
+          "prob": 0.276,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 7,
+          "number": 10,
+          "name": "グレアネオンライト",
+          "jockey": "篠谷葵",
+          "prob": 0.258,
+          "win_rate": 0.0,
+          "show_rate": 8.3
+        },
+        {
+          "rank": 8,
+          "number": 7,
+          "name": "カマチョクイン",
+          "jockey": "和田譲治",
+          "prob": 0.249,
+          "win_rate": 0.0,
+          "show_rate": 5.9
+        },
+        {
+          "rank": 9,
+          "number": 1,
+          "name": "ケテンドリーム",
+          "jockey": "吉井章",
+          "prob": 0.209,
+          "win_rate": 0.0,
+          "show_rate": 10.0
+        },
+        {
+          "rank": 10,
+          "number": 8,
+          "name": "ホーリーグレイル",
+          "jockey": "矢野貴之",
+          "prob": 0.209,
+          "win_rate": 10.0,
+          "show_rate": 20.0
+        },
+        {
+          "rank": 11,
+          "number": 16,
+          "name": "ローリエフレイバー",
+          "jockey": "野畑凌",
+          "prob": 0.196,
+          "win_rate": 0.0,
+          "show_rate": 5.3
+        },
+        {
+          "rank": 12,
+          "number": 3,
+          "name": "マーブルマカロン",
+          "jockey": "笹川翼",
+          "prob": 0.176,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 13,
+          "number": 13,
+          "name": "エスカティア",
+          "jockey": "桑村真明",
+          "prob": 0.169,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 14,
+          "number": 5,
+          "name": "エイシンマジョリカ",
+          "jockey": "藤田凌",
+          "prob": 0.153,
+          "win_rate": 0.0,
+          "show_rate": 8.3
+        },
+        {
+          "rank": 15,
+          "number": 15,
+          "name": "ミルニュイ",
+          "jockey": "澤田龍哉",
+          "prob": 0.123,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 16,
+          "number": 11,
+          "name": "コアリオ",
+          "jockey": "鷹見陸",
+          "prob": 0.096,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        }
+      ]
+    },
+    {
+      "id": "11",
+      "race_id": "202544123011",
+      "name": "11R",
+      "distance": 1400,
+      "time": "17:10",
+      "field_size": 16,
+      "predictions": [
+        {
+          "rank": 1,
+          "number": 12,
+          "name": "サイアンドコー",
+          "jockey": "野畑凌",
+          "prob": 0.499,
+          "win_rate": 0.0,
+          "show_rate": 11.8
+        },
+        {
+          "rank": 2,
+          "number": 13,
+          "name": "ゴールデンブザー",
+          "jockey": "桑村真明",
+          "prob": 0.367,
+          "win_rate": 0.0,
+          "show_rate": 10.0
+        },
+        {
+          "rank": 3,
+          "number": 9,
+          "name": "サッキーミツグ",
+          "jockey": "高橋昭平",
+          "prob": 0.329,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 4,
+          "number": 15,
+          "name": "トップアメリカン",
+          "jockey": "中山遥人",
+          "prob": 0.276,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 5,
+          "number": 16,
+          "name": "ミッキーチャレンジ",
+          "jockey": "吉井章",
+          "prob": 0.274,
+          "win_rate": 0.0,
+          "show_rate": 15.8
+        },
+        {
+          "rank": 6,
+          "number": 3,
+          "name": "ゴールドジャッジ",
+          "jockey": "張田昂",
+          "prob": 0.269,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 7,
+          "number": 5,
+          "name": "イルヴェント",
+          "jockey": "達城龍次",
+          "prob": 0.253,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 8,
+          "number": 10,
+          "name": "アレスグート",
+          "jockey": "御神本訓",
+          "prob": 0.251,
+          "win_rate": 0.0,
+          "show_rate": 15.4
+        },
+        {
+          "rank": 9,
+          "number": 11,
+          "name": "トゥースパークル",
+          "jockey": "矢野貴之",
+          "prob": 0.23,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 10,
+          "number": 6,
+          "name": "ソレナ",
+          "jockey": "山中悠希",
+          "prob": 0.214,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 11,
+          "number": 14,
+          "name": "プレストステラ",
+          "jockey": "本橋孝太",
+          "prob": 0.213,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 12,
+          "number": 7,
+          "name": "オルトスラッガー",
+          "jockey": "和田譲治",
+          "prob": 0.211,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 13,
+          "number": 4,
+          "name": "シビックドリーム",
+          "jockey": "笹川翼",
+          "prob": 0.192,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 14,
+          "number": 8,
+          "name": "プラズマ",
+          "jockey": "藤本現暉",
+          "prob": 0.139,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 15,
+          "number": 1,
+          "name": "フェルディナンド",
+          "jockey": "安藤洋一",
+          "prob": 0.13,
+          "win_rate": 0.0,
+          "show_rate": 7.7
+        },
+        {
+          "rank": 16,
+          "number": 2,
+          "name": "ワガンセ",
+          "jockey": "岡村健司",
+          "prob": 0.121,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        }
+      ]
+    },
+    {
+      "id": "12",
+      "race_id": "202544123012",
+      "name": "12R",
+      "distance": 2000,
+      "time": "17:50",
+      "field_size": 13,
+      "predictions": [
+        {
+          "rank": 1,
+          "number": 4,
+          "name": "ドラゴンバスター",
+          "jockey": "藤田凌",
+          "prob": 0.793,
+          "win_rate": 0.0,
+          "show_rate": 20.0
+        },
+        {
+          "rank": 2,
+          "number": 3,
+          "name": "メイショウカジボウ",
+          "jockey": "笹川翼",
+          "prob": 0.512,
+          "win_rate": 0.0,
+          "show_rate": 54.5
+        },
+        {
+          "rank": 3,
+          "number": 13,
+          "name": "ネポティズムベビー",
+          "jockey": "矢野貴之",
+          "prob": 0.478,
+          "win_rate": 0.0,
+          "show_rate": 16.7
+        },
+        {
+          "rank": 4,
+          "number": 2,
+          "name": "エーデルワイス",
+          "jockey": "野畑凌",
+          "prob": 0.364,
+          "win_rate": 33.3,
+          "show_rate": 50.0
+        },
+        {
+          "rank": 5,
+          "number": 9,
+          "name": "デスタン",
+          "jockey": "御神本訓",
+          "prob": 0.338,
+          "win_rate": 0.0,
+          "show_rate": 11.1
+        },
+        {
+          "rank": 6,
+          "number": 6,
+          "name": "ハヴィティペイ",
+          "jockey": "本村直樹",
+          "prob": 0.259,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 7,
+          "number": 8,
+          "name": "バズマーチ",
+          "jockey": "吉井章",
+          "prob": 0.247,
+          "win_rate": 0.0,
+          "show_rate": 33.3
+        },
+        {
+          "rank": 8,
+          "number": 12,
+          "name": "オロブランコ",
+          "jockey": "藤本現暉",
+          "prob": 0.224,
+          "win_rate": 0.0,
+          "show_rate": 11.1
+        },
+        {
+          "rank": 9,
+          "number": 5,
+          "name": "グリスタン",
+          "jockey": "桑村真明",
+          "prob": 0.219,
+          "win_rate": 16.7,
+          "show_rate": 41.7
+        },
+        {
+          "rank": 10,
+          "number": 10,
+          "name": "ベアウェイトゥゴー",
+          "jockey": "高橋昭平",
+          "prob": 0.143,
+          "win_rate": 5.0,
+          "show_rate": 5.0
+        },
+        {
+          "rank": 11,
+          "number": 11,
+          "name": "コスモギンガ",
+          "jockey": "山林堂信",
+          "prob": 0.116,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        },
+        {
+          "rank": 12,
+          "number": 7,
+          "name": "シュパネントダイヤ",
+          "jockey": "鷹見陸",
+          "prob": 0.116,
+          "win_rate": 11.1,
+          "show_rate": 44.4
+        },
+        {
+          "rank": 13,
+          "number": 1,
+          "name": "チュイション",
+          "jockey": "小野俊斗",
+          "prob": 0.099,
+          "win_rate": 0.0,
+          "show_rate": 0.0
+        }
+      ]
+    }
+  ]
+}
