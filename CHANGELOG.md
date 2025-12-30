@@ -1,6 +1,19 @@
 # CHANGELOG
 
 ## 2025-12-30
+### 機能追加: 予測精度の自動計測
+**変更内容**:
+- `evaluate_predictions.py` を新規作成:
+  - レース結果を取得して予測と比較
+  - 計測指標: 単勝的中率、複勝的中率、回収率
+  - `accuracy/YYYY-MM-DD/{track_code}.json` に保存
+- `api/main.py` に精度API追加:
+  - `GET /api/accuracy/{date}/{track_code}` - 競馬場別精度
+  - `GET /api/accuracy/{date}` - 日別サマリー
+  - `GET /api/accuracy` - 過去30日の履歴
+- `.github/workflows/evaluate.yml` を新規作成:
+  - レース終了後に手動実行して精度評価
+
 ### 機能追加: 事前計算システム（高速化）
 **変更内容**:
 - `generate_predictions.py` を新規作成:

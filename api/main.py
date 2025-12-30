@@ -814,6 +814,62 @@ def list_available_predictions(date: str):
     return {"date": date, "tracks": available}
 
 
+# ========== 精度評価API ==========
+
+@app.get("/api/accuracy/{date}/{track_code}")
+def get_accuracy(date: str, track_code: str):
+    """指定日・競馬場の精度データを取得"""
+    if track_code not in TRACKS:
+        raise HTTPException(status_code=400, detail="無効な競馬場コード")
+
+    accuracy_file = BASE_DIR / "accuracy" / date / f"{track_code}.json"
+
+    if not accuracy_file.exists():
+        raise HTTPException(status_code=404, detail="精度データがありません")
+
+    import json
+    with open(accuracy_file, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    return data
+
+
+@app.get("/api/accuracy/{date}")
+def get_daily_accuracy(date: str):
+    """指定日の全体精度サマリーを取得"""
+    summary_file = BASE_DIR / "accuracy" / date / "summary.json"
+
+    if not summary_file.exists():
+        raise HTTPException(status_code=404, detail="精度データがありません")
+
+    import json
+    with open(summary_file, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    return data
+
+
+@app.get("/api/accuracy")
+def get_accuracy_history():
+    """過去の精度データ一覧を取得"""
+    accuracy_dir = BASE_DIR / "accuracy"
+
+    if not accuracy_dir.exists():
+        return {"dates": []}
+
+    dates = []
+    for d in sorted(accuracy_dir.iterdir(), reverse=True):
+        if d.is_dir():
+            summary_file = d / "summary.json"
+            if summary_file.exists():
+                import json
+                with open(summary_file, 'r', encoding='utf-8') as f:
+                    summary = json.load(f)
+                dates.append(summary)
+
+    return {"history": dates[:30]}  # 直近30日分
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

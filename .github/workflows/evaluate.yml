@@ -1,0 +1,89 @@
+name: Evaluate Predictions
+
+on:
+  # 手動実行（レース終了後に実行）
+  workflow_dispatch:
+    inputs:
+      date:
+        description: '評価対象日 (YYYY-MM-DD形式、空欄で今日)'
+        required: false
+        type: string
+      track:
+        description: '競馬場'
+        required: true
+        type: choice
+        options:
+          - 大井
+          - 川崎
+          - 船橋
+          - 浦和
+          - 門別
+          - 盛岡
+          - 水沢
+          - 金沢
+          - 笠松
+          - 名古屋
+          - 園田
+          - 姫路
+          - 高知
+          - 佐賀
+
+permissions:
+  contents: write
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          pip install requests beautifulsoup4 lxml
+
+      - name: Determine track code
+        id: track
+        run: |
+          case "${{ github.event.inputs.track }}" in
+            "大井") CODE="44" ;;
+            "川崎") CODE="45" ;;
+            "船橋") CODE="43" ;;
+            "浦和") CODE="42" ;;
+            "門別") CODE="30" ;;
+            "盛岡") CODE="35" ;;
+            "水沢") CODE="36" ;;
+            "金沢") CODE="46" ;;
+            "笠松") CODE="47" ;;
+            "名古屋") CODE="48" ;;
+            "園田") CODE="50" ;;
+            "姫路") CODE="51" ;;
+            "高知") CODE="54" ;;
+            "佐賀") CODE="55" ;;
+          esac
+          echo "code=$CODE" >> $GITHUB_OUTPUT
+
+      - name: Evaluate predictions
+        run: |
+          if [ -n "${{ github.event.inputs.date }}" ]; then
+            DATE="${{ github.event.inputs.date }}"
+          else
+            DATE=$(TZ=Asia/Tokyo date +%Y-%m-%d)
+          fi
+          echo "📊 精度評価: $DATE - ${{ github.event.inputs.track }}"
+          python evaluate_predictions.py "$DATE" "${{ steps.track.outputs.code }}"
+
+      - name: Commit and push
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add accuracy/
+          git diff --staged --quiet || git commit -m "📊 精度評価: ${{ github.event.inputs.track }} $(TZ=Asia/Tokyo date +%Y-%m-%d)"
+          git pull --rebase origin main || true
+          git push
