@@ -1,6 +1,23 @@
 # CHANGELOG
 
 ## 2025-12-30
+### 機能追加: 分析ダッシュボードAPI（SSE対応）
+**変更内容**:
+- `api/main.py` に誤答分析APIを追加
+- SSE（Server-Sent Events）で進捗をリアルタイム送信
+
+**追加エンドポイント**:
+| エンドポイント | 機能 |
+|----------------|------|
+| `GET /api/analyze/{date}` | 分析実行（SSEストリーム） |
+| `GET /api/analysis/{date}` | 保存済みレポート取得 |
+
+**SSEイベント形式**:
+- `start`: 分析開始（total件数）
+- `progress`: 進捗（current/total, race_id）
+- `result`: 分析結果（summary, by_track_condition等）
+- `complete`: 完了
+
 ### 機能追加: 誤答分析パイプライン（精度向上用）
 **変更内容**:
 - 予測と結果を照合し、どこで外しているかを分析する機能を追加

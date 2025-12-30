@@ -1,6 +1,7 @@
 # 地方競馬 予測API
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
 import pandas as pd
@@ -14,6 +15,8 @@ from datetime import datetime
 import os
 import json
 from pathlib import Path
+from collections import defaultdict
+import asyncio
 
 # プロジェクトのルートディレクトリを取得
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -1093,6 +1096,238 @@ def get_all_models_info():
         models_info.append(model_data)
 
     return {"models": models_info}
+
+
+# ========== 誤答分析API（SSE対応） ==========
+
+def analyze_get_race_result(race_id: str) -> list:
+    """レース結果（着順）を取得（分析用）"""
+    url = f"https://nar.netkeiba.com/race/result.html?race_id={race_id}"
+    try:
+        session = requests.Session()
+        session.headers.update({'User-Agent': 'Mozilla/5.0'})
+        r = session.get(url, timeout=10)
+        r.encoding = 'EUC-JP'
+        soup = BeautifulSoup(r.text, 'lxml')
+
+        results = []
+        table = soup.find('table', class_='RaceTable01')
+        if not table:
+            table = soup.find('table', class_='Result_Table')
+        if not table:
+            return []
+
+        for tr in table.find_all('tr'):
+            tds = tr.find_all('td')
+            if len(tds) < 3:
+                continue
+
+            rank_text = tds[0].get_text(strip=True)
+            if not rank_text.isdigit():
+                continue
+            rank = int(rank_text)
+
+            umaban_text = tds[2].get_text(strip=True)
+            if umaban_text.isdigit() and 1 <= int(umaban_text) <= 18:
+                horse_num = int(umaban_text)
+                results.append({"rank": rank, "number": horse_num})
+
+        return sorted(results, key=lambda x: x["rank"])
+    except Exception as e:
+        print(f"Error fetching result for {race_id}: {e}")
+        return []
+
+
+def compare_prediction(prediction_log: dict, result: list) -> dict:
+    """予測と結果を照合"""
+    if not result:
+        return None
+
+    predictions = prediction_log["predictions"]
+    metadata = prediction_log.get("metadata", {})
+
+    pred_top3 = [p["number"] for p in predictions[:3]]
+    pred_1st = predictions[0]["number"] if predictions else None
+    actual_top3 = [r["number"] for r in result[:3]]
+    actual_1st = result[0]["number"] if result else None
+
+    win_hit = (pred_1st == actual_1st)
+    show_hit = (pred_1st in actual_top3)
+
+    # 予測1位の馬が実際に何着だったか
+    pred_1st_actual_rank = None
+    for r in result:
+        if r["number"] == pred_1st:
+            pred_1st_actual_rank = r["rank"]
+            break
+
+    # エラータイプ分類
+    error_type = None
+    if not show_hit:
+        if pred_1st_actual_rank is None:
+            error_type = "出走取消"
+        elif pred_1st_actual_rank >= 10:
+            error_type = "大外れ(10着以下)"
+        elif pred_1st_actual_rank >= 6:
+            error_type = "中外れ(6-9着)"
+        elif pred_1st_actual_rank >= 4:
+            error_type = "惜しい(4-5着)"
+
+    return {
+        "race_id": prediction_log["race_id"],
+        "track_name": prediction_log.get("track_name", "不明"),
+        "race_name": metadata.get("race_name", "不明"),
+        "pred_1st": pred_1st,
+        "actual_1st": actual_1st,
+        "win_hit": win_hit,
+        "show_hit": show_hit,
+        "pred_1st_actual_rank": pred_1st_actual_rank,
+        "error_type": error_type,
+        "metadata": metadata
+    }
+
+
+async def analyze_stream(date: str):
+    """分析をストリーミングで実行"""
+    log_dir = BASE_DIR / "prediction_logs" / date
+
+    if not log_dir.exists():
+        yield f"data: {json.dumps({'type': 'error', 'message': '予測ログがありません'})}\n\n"
+        return
+
+    log_files = list(log_dir.glob("*.json"))
+    total = len(log_files)
+
+    if total == 0:
+        yield f"data: {json.dumps({'type': 'error', 'message': '予測ログがありません'})}\n\n"
+        return
+
+    yield f"data: {json.dumps({'type': 'start', 'total': total})}\n\n"
+
+    comparisons = []
+    for i, log_file in enumerate(log_files):
+        with open(log_file, 'r', encoding='utf-8') as f:
+            prediction_log = json.load(f)
+
+        race_id = prediction_log["race_id"]
+
+        # 進捗を送信
+        yield f"data: {json.dumps({'type': 'progress', 'current': i + 1, 'total': total, 'race_id': race_id})}\n\n"
+
+        # 結果を取得
+        result = analyze_get_race_result(race_id)
+        if result:
+            comparison = compare_prediction(prediction_log, result)
+            if comparison:
+                comparisons.append(comparison)
+
+        # 少し待機（サーバー負荷軽減）
+        await asyncio.sleep(0.3)
+
+    # 集計
+    if not comparisons:
+        yield f"data: {json.dumps({'type': 'error', 'message': '照合できるデータがありません'})}\n\n"
+        return
+
+    # 統計を計算
+    total_races = len(comparisons)
+    win_hits = sum(1 for c in comparisons if c["win_hit"])
+    show_hits = sum(1 for c in comparisons if c["show_hit"])
+
+    # 馬場状態別
+    by_track_condition = defaultdict(lambda: {"total": 0, "show_hits": 0})
+    # 天気別
+    by_weather = defaultdict(lambda: {"total": 0, "show_hits": 0})
+    # 距離別
+    by_distance = defaultdict(lambda: {"total": 0, "show_hits": 0})
+    # エラータイプ
+    error_types = defaultdict(int)
+
+    for c in comparisons:
+        meta = c.get("metadata", {})
+
+        # 馬場状態
+        track_cond = meta.get("track_condition", "不明")
+        by_track_condition[track_cond]["total"] += 1
+        if c["show_hit"]:
+            by_track_condition[track_cond]["show_hits"] += 1
+
+        # 天気
+        weather = meta.get("weather", "不明")
+        by_weather[weather]["total"] += 1
+        if c["show_hit"]:
+            by_weather[weather]["show_hits"] += 1
+
+        # 距離
+        distance = meta.get("distance", 0)
+        if distance < 1400:
+            dist_cat = "短距離(<1400m)"
+        elif distance < 1800:
+            dist_cat = "中距離(1400-1800m)"
+        else:
+            dist_cat = "長距離(>1800m)"
+        by_distance[dist_cat]["total"] += 1
+        if c["show_hit"]:
+            by_distance[dist_cat]["show_hits"] += 1
+
+        # エラータイプ
+        if c.get("error_type"):
+            error_types[c["error_type"]] += 1
+
+    # 結果を送信
+    result_data = {
+        "type": "result",
+        "date": date,
+        "summary": {
+            "total_races": total_races,
+            "win_hits": win_hits,
+            "win_rate": round(win_hits / total_races * 100, 1) if total_races > 0 else 0,
+            "show_hits": show_hits,
+            "show_rate": round(show_hits / total_races * 100, 1) if total_races > 0 else 0
+        },
+        "by_track_condition": {k: v for k, v in by_track_condition.items()},
+        "by_weather": {k: v for k, v in by_weather.items()},
+        "by_distance": {k: v for k, v in by_distance.items()},
+        "error_types": dict(error_types),
+        "details": comparisons
+    }
+
+    yield f"data: {json.dumps(result_data, ensure_ascii=False)}\n\n"
+
+    # 結果をファイルに保存
+    output_dir = BASE_DIR / "analysis_reports" / date
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_file = output_dir / "report.json"
+    with open(output_file, 'w', encoding='utf-8') as f:
+        json.dump(result_data, f, ensure_ascii=False, indent=2)
+
+    yield f"data: {json.dumps({'type': 'complete', 'saved_to': str(output_file)})}\n\n"
+
+
+@app.get("/api/analyze/{date}")
+async def analyze_predictions(date: str):
+    """予測の誤答分析を実行（SSEでストリーミング）"""
+    return StreamingResponse(
+        analyze_stream(date),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Access-Control-Allow-Origin": "*"
+        }
+    )
+
+
+@app.get("/api/analysis/{date}")
+def get_analysis_report(date: str):
+    """保存済みの分析レポートを取得"""
+    report_file = BASE_DIR / "analysis_reports" / date / "report.json"
+
+    if not report_file.exists():
+        raise HTTPException(status_code=404, detail="分析レポートがありません")
+
+    with open(report_file, 'r', encoding='utf-8') as f:
+        return json.load(f)
 
 
 if __name__ == "__main__":
