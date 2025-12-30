@@ -1,6 +1,42 @@
 # CHANGELOG
 
 ## 2025-12-30
+### 機能追加: Optunaによるハイパーパラメータ最適化
+**変更内容**:
+- `optimize_model.py` を新規作成
+- Optunaで LightGBM のハイパーパラメータを自動最適化
+- 大井モデルを最適化して本番適用
+
+**最適化パラメータ**:
+```python
+{
+    'num_leaves': 47,
+    'learning_rate': 0.0746,
+    'min_child_samples': 11,
+    'reg_alpha': 0.702,
+    'feature_fraction': 0.899,
+    'bagging_fraction': 0.786,
+    'bagging_freq': 7
+}
+```
+
+**改善結果（大井競馬場）**:
+| 指標 | 最適化前 | 最適化後 | 改善 |
+|------|---------|---------|------|
+| 単勝的中率 | 36.8% | 43.4% | +6.6pt |
+| 複勝的中率 | 72.2% | 92.0% | +19.8pt |
+| AUC | 0.780 | 0.919 | +0.138 |
+
+**使い方**:
+```bash
+python optimize_model.py 大井
+python optimize_model.py 大井 --trials 50  # 試行回数指定
+```
+
+**バックアップ**: `models/model_ohi_backup_20251230.pkl`
+
+---
+
 ### 機能追加: 回収率計算スクリプト
 **変更内容**:
 - `calculate_roi.py` を新規作成
