@@ -48,7 +48,7 @@ permissions:
 jobs:
   train:
     runs-on: ubuntu-latest
-    timeout-minutes: 180  # 初回は長めに
+    timeout-minutes: 360  # 3年分データ取得用（6時間）
 
     steps:
       - name: Checkout
