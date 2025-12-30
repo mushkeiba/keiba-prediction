@@ -112,6 +112,13 @@ def generate_predictions_for_track(track_code: str, date_str: str) -> dict:
     }
 
 
+def check_races_exist(track_code: str, date_str: str) -> bool:
+    """指定日にレースがあるかチェック（軽量）"""
+    scraper = NARScraper(track_code, delay=0.3)
+    race_ids = scraper.get_race_list_by_date(date_str)
+    return len(race_ids) > 0
+
+
 def main():
     # 日付指定（引数 or 今日）
     if len(sys.argv) >= 2:
@@ -126,8 +133,24 @@ def main():
     output_dir = BASE_DIR / "predictions" / date_formatted
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # 全競馬場を処理
+    # まず開催中の競馬場を特定（軽量チェック）
+    print("\n開催チェック中...")
+    active_tracks = []
     for track_code, track_info in TRACKS.items():
+        if check_races_exist(track_code, date_str):
+            active_tracks.append((track_code, track_info))
+            print(f"  ✓ {track_info['name']}: 開催あり")
+        else:
+            print(f"  - {track_info['name']}: 開催なし")
+
+    if not active_tracks:
+        print("\n本日開催の競馬場はありません")
+        return
+
+    print(f"\n{len(active_tracks)}場の予測を生成...")
+
+    # 開催中の競馬場のみ処理
+    for track_code, track_info in active_tracks:
         print(f"\n処理中: {track_info['name']} ({track_code})")
 
         result = generate_predictions_for_track(track_code, date_str)
