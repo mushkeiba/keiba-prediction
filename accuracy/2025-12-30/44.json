@@ -1,0 +1,111 @@
+{
+  "date": "2025-12-30",
+  "track_code": "44",
+  "track_name": "大井",
+  "race_count": 8,
+  "win_hits": 1,
+  "show_hits": 1,
+  "win_rate": 12.5,
+  "show_rate": 25.0,
+  "total_bet": 800,
+  "total_payout": 1410.0,
+  "roi": 176.2,
+  "evaluations": [
+    {
+      "race_id": "202544123001",
+      "race_num": "01",
+      "pred_1st": 10,
+      "actual_1st": 7,
+      "win_hit": false,
+      "show_hit": false,
+      "top3_matches": 0,
+      "bet": 100,
+      "payout": 0,
+      "win_odds": 1.8
+    },
+    {
+      "race_id": "202544123002",
+      "race_num": "02",
+      "pred_1st": 1,
+      "actual_1st": 1,
+      "win_hit": true,
+      "show_hit": true,
+      "top3_matches": 1,
+      "bet": 100,
+      "payout": 1410.0,
+      "win_odds": 14.1
+    },
+    {
+      "race_id": "202544123003",
+      "race_num": "03",
+      "pred_1st": 6,
+      "actual_1st": 1,
+      "win_hit": false,
+      "show_hit": true,
+      "top3_matches": 2,
+      "bet": 100,
+      "payout": 0,
+      "win_odds": 1.9
+    },
+    {
+      "race_id": "202544123004",
+      "race_num": "04",
+      "pred_1st": 10,
+      "actual_1st": 6,
+      "win_hit": false,
+      "show_hit": false,
+      "top3_matches": 1,
+      "bet": 100,
+      "payout": 0,
+      "win_odds": 1.2
+    },
+    {
+      "race_id": "202544123005",
+      "race_num": "05",
+      "pred_1st": 12,
+      "actual_1st": 8,
+      "win_hit": false,
+      "show_hit": false,
+      "top3_matches": 1,
+      "bet": 100,
+      "payout": 0,
+      "win_odds": 3.2
+    },
+    {
+      "race_id": "202544123006",
+      "race_num": "06",
+      "pred_1st": 14,
+      "actual_1st": 6,
+      "win_hit": false,
+      "show_hit": false,
+      "top3_matches": 0,
+      "bet": 100,
+      "payout": 0,
+      "win_odds": 7.4
+    },
+    {
+      "race_id": "202544123007",
+      "race_num": "07",
+      "pred_1st": 11,
+      "actual_1st": 3,
+      "win_hit": false,
+      "show_hit": false,
+      "top3_matches": 1,
+      "bet": 100,
+      "payout": 0,
+      "win_odds": 3.9
+    },
+    {
+      "race_id": "202544123008",
+      "race_num": "08",
+      "pred_1st": 2,
+      "actual_1st": 7,
+      "win_hit": false,
+      "show_hit": false,
+      "top3_matches": 0,
+      "bet": 100,
+      "payout": 0,
+      "win_odds": 7.1
+    }
+  ]
+}

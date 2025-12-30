@@ -11,6 +11,10 @@ import requests
 from bs4 import BeautifulSoup
 import time
 import re
+import urllib3
+
+# SSL警告を抑制
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # プロジェクトのルートディレクトリ
 BASE_DIR = Path(__file__).resolve().parent
@@ -32,7 +36,7 @@ def fetch_race_result(race_id: str) -> dict:
         time.sleep(0.5)
         session = requests.Session()
         session.headers.update({'User-Agent': 'Mozilla/5.0'})
-        r = session.get(url)
+        r = session.get(url, verify=False)  # SSL検証をスキップ
         r.encoding = 'EUC-JP'
         soup = BeautifulSoup(r.text, 'lxml')
 
@@ -190,13 +194,13 @@ def evaluate_track(date_str: str, track_code: str) -> dict:
         # 結果取得
         result = fetch_race_result(race_id)
         if "error" in result:
-            print(f"❌ {result['error']}")
+            print(f"[ERROR] {result['error']}")
             continue
 
         # 評価
         eval_result = evaluate_race(race, result)
         if "error" in eval_result:
-            print(f"❌ {eval_result['error']}")
+            print(f"[ERROR] {eval_result['error']}")
             continue
 
         evaluations.append(eval_result)
@@ -205,12 +209,12 @@ def evaluate_track(date_str: str, track_code: str) -> dict:
 
         if eval_result["win_hit"]:
             win_hits += 1
-            print(f"🎯 単勝的中! (払戻: {eval_result['payout']}円)")
+            print(f"[HIT!] Tansho! (Payout: {eval_result['payout']}yen)")
         elif eval_result["show_hit"]:
             show_hits += 1
-            print(f"⭕ 複勝的中 (1位予測が{eval_result['top3_matches']}着)")
+            print(f"[OK] Fukusho (Pred 1st -> Actual {eval_result['top3_matches']}th)")
         else:
-            print(f"❌ 不的中 (予測:{eval_result['pred_1st']}番 → 実際:{eval_result['actual_1st']}番)")
+            print(f"[MISS] Pred:{eval_result['pred_1st']} -> Actual:{eval_result['actual_1st']}")
 
     # 集計
     race_count = len(evaluations)
@@ -292,7 +296,7 @@ def main():
 
             # 結果表示
             print(f"\n{'='*40}")
-            print(f"📊 {track_name} 成績")
+            print(f"[RESULT] {track_name}")
             print(f"{'='*40}")
             print(f"レース数: {summary['race_count']}")
             print(f"単勝的中: {summary['win_hits']}回 ({summary['win_rate']}%)")
@@ -326,7 +330,7 @@ def main():
             json.dump(daily_summary, f, ensure_ascii=False, indent=2)
 
         print(f"\n{'='*50}")
-        print(f"📈 {date_formatted} 全体成績")
+        print(f"[TOTAL] {date_formatted}")
         print(f"{'='*50}")
         print(f"競馬場: {', '.join(daily_summary['tracks'])}")
         print(f"レース数: {total_races}")
