@@ -1,6 +1,20 @@
 # CHANGELOG
 
 ## 2025-12-30
+### 機能追加: 事前計算システム（高速化）
+**変更内容**:
+- `generate_predictions.py` を新規作成:
+  - 全競馬場の予測を事前計算してJSONに保存
+  - `predictions/YYYY-MM-DD/{track_code}.json` 形式で保存
+  - オッズ以外の情報（馬名、騎手、AI予測確率、勝率、複勝率）を保存
+- `api/main.py` に新エンドポイント追加:
+  - `POST /api/odds` - オッズのみ取得（軽量）
+  - `GET /api/predictions/{date}/{track_code}` - 事前計算済み予測取得
+  - `GET /api/predictions/{date}` - 利用可能な予測一覧
+- `.github/workflows/predict.yml` を新規作成:
+  - 毎朝6時(JST)に全競馬場の予測を自動生成
+  - 手動実行にも対応
+
 ### 改善: 妙味判定基準の厳格化
 **問題**: 期待値 > 1.0 だと基準が緩すぎて多くの馬に🔥がつく
 **変更内容**:

@@ -748,6 +748,72 @@ def predict_single_race(request: SingleRaceRequest):
     }
 
 
+# ========== 軽量オッズ取得API ==========
+
+class OddsRequest(BaseModel):
+    race_id: str
+    track_code: str
+
+
+@app.post("/api/odds")
+def get_odds_only(request: OddsRequest):
+    """オッズのみ取得（軽量）"""
+    race_id = request.race_id
+    track_code = request.track_code
+
+    if track_code not in TRACKS:
+        raise HTTPException(status_code=400, detail="無効な競馬場コード")
+
+    scraper = NARScraper(track_code, delay=0.2)
+    odds_dict = scraper.get_odds(race_id)
+
+    return {
+        "race_id": race_id,
+        "odds": odds_dict
+    }
+
+
+# ========== 事前計算済み予測取得API ==========
+
+@app.get("/api/predictions/{date}/{track_code}")
+def get_precomputed_predictions(date: str, track_code: str):
+    """事前計算済みの予測JSONを取得"""
+    if track_code not in TRACKS:
+        raise HTTPException(status_code=400, detail="無効な競馬場コード")
+
+    predictions_file = BASE_DIR / "predictions" / date / f"{track_code}.json"
+
+    if not predictions_file.exists():
+        raise HTTPException(status_code=404, detail="予測データがありません")
+
+    import json
+    with open(predictions_file, 'r', encoding='utf-8') as f:
+        data = json.load(f)
+
+    return data
+
+
+@app.get("/api/predictions/{date}")
+def list_available_predictions(date: str):
+    """指定日の利用可能な予測一覧"""
+    predictions_dir = BASE_DIR / "predictions" / date
+
+    if not predictions_dir.exists():
+        return {"date": date, "tracks": []}
+
+    available = []
+    for f in predictions_dir.glob("*.json"):
+        track_code = f.stem
+        if track_code in TRACKS:
+            available.append({
+                "code": track_code,
+                "name": TRACKS[track_code]['name'],
+                "emoji": TRACKS[track_code]['emoji']
+            })
+
+    return {"date": date, "tracks": available}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
