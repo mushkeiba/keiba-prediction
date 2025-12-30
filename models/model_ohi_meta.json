@@ -1,0 +1,34 @@
+{
+  "track_name": "大井",
+  "trained_at": "2025-12-30 06:57:10",
+  "data_count": 13797,
+  "race_count": 1154,
+  "date_range": {
+    "from": "2024-44-12",
+    "to": "2025-44-12"
+  },
+  "auc": 0.727,
+  "features": [
+    "horse_runs",
+    "horse_win_rate",
+    "horse_place_rate",
+    "horse_show_rate",
+    "horse_avg_rank",
+    "horse_recent_win_rate",
+    "horse_recent_show_rate",
+    "horse_recent_avg_rank",
+    "last_rank",
+    "jockey_win_rate",
+    "jockey_place_rate",
+    "jockey_show_rate",
+    "horse_number",
+    "bracket",
+    "age",
+    "weight_carried",
+    "distance",
+    "sex_encoded",
+    "track_encoded",
+    "field_size",
+    "weight_diff"
+  ]
+}
