@@ -1,0 +1,39 @@
+{
+  "track_name": "川崎",
+  "trained_at": "2025-12-30 10:42:34",
+  "data_count": 25137,
+  "race_count": 2272,
+  "date_range": {
+    "from": "2023-01-01",
+    "to": "2025-12-19"
+  },
+  "auc": 0.6911,
+  "features": [
+    "horse_runs",
+    "horse_win_rate",
+    "horse_place_rate",
+    "horse_show_rate",
+    "horse_avg_rank",
+    "horse_recent_win_rate",
+    "horse_recent_show_rate",
+    "horse_recent_avg_rank",
+    "last_rank",
+    "jockey_win_rate",
+    "jockey_place_rate",
+    "jockey_show_rate",
+    "horse_number",
+    "bracket",
+    "age",
+    "weight_carried",
+    "distance",
+    "sex_encoded",
+    "track_encoded",
+    "field_size",
+    "weight_diff",
+    "track_condition_encoded",
+    "weather_encoded",
+    "trainer_encoded",
+    "horse_weight",
+    "horse_weight_change"
+  ]
+}
