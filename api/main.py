@@ -246,6 +246,86 @@ class NARScraper:
         except Exception as e:
             print(f'Error: {e}')
 
+    def get_all_odds(self, race_id: str) -> dict:
+        """単勝・複勝オッズを一括取得（API呼び出し最小化）"""
+        result = {'win': {}, 'place': {}}
+
+        # 1. 出馬表ページから単勝オッズを取得（1リクエスト目）
+        shutuba_url = f"{self.BASE_URL}/race/shutuba.html?race_id={race_id}"
+        try:
+            soup = self._fetch(shutuba_url)
+            table = soup.find('table', class_='ShutubaTable')
+            if not table:
+                table = soup.find('table', class_='RaceTable01')
+
+            if table:
+                for tr in table.find_all('tr'):
+                    tds = tr.find_all('td')
+                    if len(tds) >= 2:
+                        umaban = None
+                        odds_val = None
+
+                        for i, td in enumerate(tds[:3]):
+                            td_class = ' '.join(td.get('class', []))
+                            text = td.get_text(strip=True)
+                            if 'Umaban' in td_class or (i == 1 and text.isdigit()):
+                                if text.isdigit() and 1 <= int(text) <= 18:
+                                    umaban = int(text)
+                                    break
+
+                        for td in tds:
+                            td_class = ' '.join(td.get('class', []))
+                            if 'Popular' in td_class or 'Odds' in td_class or 'odds' in td_class.lower():
+                                text = td.get_text(strip=True)
+                                odds_match = re.search(r'(\d+\.?\d*)', text)
+                                if odds_match:
+                                    val = float(odds_match.group(1))
+                                    if 1.0 <= val <= 999.9:
+                                        odds_val = val
+                                        break
+
+                        if umaban and odds_val:
+                            result['win'][umaban] = odds_val
+        except Exception as e:
+            print(f'Win odds error: {e}')
+
+        # 2. 複勝オッズページから取得（2リクエスト目）
+        place_url = f"{self.BASE_URL}/odds/odds_get_form.html?type=b2&race_id={race_id}"
+        try:
+            soup = self._fetch(place_url)
+            tables = soup.find_all('table')
+            if len(tables) >= 2:
+                table = tables[1]
+                for tr in table.find_all('tr'):
+                    tds = tr.find_all('td')
+                    if len(tds) >= 6:
+                        umaban_text = tds[0].get_text(strip=True)
+                        if umaban_text.isdigit():
+                            umaban = int(umaban_text)
+                            odds_text = tds[-1].get_text(strip=True)
+                            odds_match = re.search(r'(\d+\.?\d*)\s*-\s*(\d+\.?\d*)', odds_text)
+                            if odds_match:
+                                min_odds = float(odds_match.group(1))
+                                max_odds = float(odds_match.group(2))
+                                result['place'][umaban] = {
+                                    'min': min_odds,
+                                    'max': max_odds,
+                                    'avg': round((min_odds + max_odds) / 2, 2)
+                                }
+                            else:
+                                single_match = re.search(r'(\d+\.?\d*)', odds_text)
+                                if single_match:
+                                    odds_val = float(single_match.group(1))
+                                    result['place'][umaban] = {
+                                        'min': odds_val,
+                                        'max': odds_val,
+                                        'avg': odds_val
+                                    }
+        except Exception as e:
+            print(f'Place odds error: {e}')
+
+        return result
+
     def get_odds(self, race_id: str, horse_names: list = None) -> dict:
         """単勝オッズを取得（出馬表の予想オッズ列から）"""
         odds_dict = {}
@@ -680,9 +760,10 @@ def predict(request: PredictRequest):
         df = scraper.enrich_data(df)
         df = processor.process(df)
 
-        # オッズ取得（馬名リストを渡して正しいレースか確認）
-        horse_names = df['horse_name'].tolist() if 'horse_name' in df.columns else []
-        odds_dict = scraper.get_odds(rid, horse_names)
+        # オッズ取得（単勝・複勝を一括取得）
+        all_odds = scraper.get_all_odds(rid)
+        win_odds_dict = all_odds.get('win', {})
+        place_odds_dict = all_odds.get('place', {})
 
         # 予測
         X = df[model_features].fillna(-1)
@@ -699,7 +780,11 @@ def predict(request: PredictRequest):
         predictions = []
         for i, (_, row) in enumerate(df.iterrows()):  # 全馬を返す
             horse_num = int(row['horse_number']) if pd.notna(row.get('horse_number')) else 0
-            odds = odds_dict.get(horse_num, 0)
+            win_odds = win_odds_dict.get(horse_num, 0)
+            place_odds_data = place_odds_dict.get(horse_num, {})
+            place_odds = place_odds_data.get('avg', 0) if place_odds_data else 0
+            place_odds_min = place_odds_data.get('min', 0) if place_odds_data else 0
+            place_odds_max = place_odds_data.get('max', 0) if place_odds_data else 0
             prob = float(row['prob'])
 
             # 勝率・複勝率を取得（0-1の範囲であるべき）
@@ -709,10 +794,13 @@ def predict(request: PredictRequest):
             win_rate = raw_win_rate * 100
             show_rate = raw_show_rate * 100
 
-            # 妙味計算: 予測確率 × オッズ > 2.5 なら狙い目（厳選）
-            # 例: 予測50% × オッズ5.0 = 2.5 → 狙い目
-            expected_value = prob * odds if odds > 0 else 0
-            is_value = expected_value > 2.5  # 期待値2.5以上なら狙い目
+            # 期待値計算（複勝オッズ × AI確率）
+            # 複勝オッズがあればそれを使用、なければ単勝/3で推定
+            effective_place_odds = place_odds if place_odds > 0 else (win_odds / 3 if win_odds > 0 else 0)
+            expected_value = prob * effective_place_odds if effective_place_odds > 0 else 0
+
+            # 妙味判定: 期待値 > 1.0 なら黒字期待
+            is_value = expected_value > 1.0
 
             predictions.append({
                 "rank": i + 1,
@@ -722,7 +810,10 @@ def predict(request: PredictRequest):
                 "prob": round(prob, 3),
                 "win_rate": round(win_rate, 1),
                 "show_rate": round(show_rate, 1),
-                "odds": odds,
+                "odds": win_odds,
+                "place_odds": place_odds,
+                "place_odds_min": place_odds_min,
+                "place_odds_max": place_odds_max,
                 "expected_value": round(expected_value, 2),
                 "is_value": is_value
             })
@@ -801,9 +892,10 @@ def predict_single_race(request: SingleRaceRequest):
     df = scraper.enrich_data(df)
     df = processor.process(df)
 
-    # オッズ取得（馬名リストを渡して正しいレースか確認）
-    horse_names = df['horse_name'].tolist() if 'horse_name' in df.columns else []
-    odds_dict = scraper.get_odds(race_id, horse_names)
+    # オッズ取得（単勝・複勝を一括取得）
+    all_odds = scraper.get_all_odds(race_id)
+    win_odds_dict = all_odds.get('win', {})
+    place_odds_dict = all_odds.get('place', {})
 
     # 予測
     X = df[model_features].fillna(-1)
@@ -820,7 +912,11 @@ def predict_single_race(request: SingleRaceRequest):
     predictions = []
     for i, (_, row) in enumerate(df.iterrows()):  # 全馬を返す
         horse_num = int(row['horse_number']) if pd.notna(row.get('horse_number')) else 0
-        odds = odds_dict.get(horse_num, 0)
+        win_odds = win_odds_dict.get(horse_num, 0)
+        place_odds_data = place_odds_dict.get(horse_num, {})
+        place_odds = place_odds_data.get('avg', 0) if place_odds_data else 0
+        place_odds_min = place_odds_data.get('min', 0) if place_odds_data else 0
+        place_odds_max = place_odds_data.get('max', 0) if place_odds_data else 0
         prob = float(row['prob'])
 
         # 勝率・複勝率を取得（0-1の範囲であるべき）
@@ -830,8 +926,10 @@ def predict_single_race(request: SingleRaceRequest):
         win_rate = raw_win_rate * 100
         show_rate = raw_show_rate * 100
 
-        expected_value = prob * odds if odds > 0 else 0
-        is_value = expected_value > 2.5  # 期待値2.5以上なら狙い目
+        # 期待値計算（複勝オッズ × AI確率）
+        effective_place_odds = place_odds if place_odds > 0 else (win_odds / 3 if win_odds > 0 else 0)
+        expected_value = prob * effective_place_odds if effective_place_odds > 0 else 0
+        is_value = expected_value > 1.0
 
         predictions.append({
             "rank": i + 1,
@@ -841,7 +939,10 @@ def predict_single_race(request: SingleRaceRequest):
             "prob": round(prob, 3),
             "win_rate": round(win_rate, 1),
             "show_rate": round(show_rate, 1),
-            "odds": odds,
+            "odds": win_odds,
+            "place_odds": place_odds,
+            "place_odds_min": place_odds_min,
+            "place_odds_max": place_odds_max,
             "expected_value": round(expected_value, 2),
             "is_value": is_value
         })
