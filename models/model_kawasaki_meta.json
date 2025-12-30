@@ -1,13 +1,13 @@
 {
   "track_name": "川崎",
-  "trained_at": "2025-12-30 10:42:34",
+  "trained_at": "2025-12-30 21:37:23",
   "data_count": 25137,
   "race_count": 2272,
   "date_range": {
     "from": "2023-01-01",
     "to": "2025-12-19"
   },
-  "auc": 0.6911,
+  "auc": 0.6941,
   "features": [
     "horse_runs",
     "horse_win_rate",
