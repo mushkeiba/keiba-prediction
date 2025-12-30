@@ -1305,17 +1305,101 @@ async def analyze_stream(date: str):
 
 
 @app.get("/api/analyze/{date}")
-async def analyze_predictions(date: str):
-    """予測の誤答分析を実行（SSEでストリーミング）"""
-    return StreamingResponse(
-        analyze_stream(date),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "Access-Control-Allow-Origin": "*"
-        }
-    )
+def analyze_predictions(date: str):
+    """予測の誤答分析を実行（通常API版）"""
+    log_dir = BASE_DIR / "prediction_logs" / date
+
+    if not log_dir.exists():
+        raise HTTPException(status_code=404, detail="予測ログがありません")
+
+    log_files = list(log_dir.glob("*.json"))
+    total = len(log_files)
+
+    if total == 0:
+        raise HTTPException(status_code=404, detail="予測ログがありません")
+
+    comparisons = []
+    for log_file in log_files:
+        with open(log_file, 'r', encoding='utf-8') as f:
+            prediction_log = json.load(f)
+
+        race_id = prediction_log["race_id"]
+
+        # 結果を取得
+        result = analyze_get_race_result(race_id)
+        if result:
+            comparison = compare_prediction(prediction_log, result)
+            if comparison:
+                comparisons.append(comparison)
+
+        # サーバー負荷軽減
+        time.sleep(0.3)
+
+    if not comparisons:
+        raise HTTPException(status_code=404, detail="照合できるデータがありません")
+
+    # 統計を計算
+    total_races = len(comparisons)
+    win_hits = sum(1 for c in comparisons if c["win_hit"])
+    show_hits = sum(1 for c in comparisons if c["show_hit"])
+
+    # 馬場状態別
+    by_track_condition = defaultdict(lambda: {"total": 0, "show_hits": 0})
+    by_weather = defaultdict(lambda: {"total": 0, "show_hits": 0})
+    by_distance = defaultdict(lambda: {"total": 0, "show_hits": 0})
+    error_types = defaultdict(int)
+
+    for c in comparisons:
+        meta = c.get("metadata", {})
+
+        track_cond = meta.get("track_condition", "不明")
+        by_track_condition[track_cond]["total"] += 1
+        if c["show_hit"]:
+            by_track_condition[track_cond]["show_hits"] += 1
+
+        weather = meta.get("weather", "不明")
+        by_weather[weather]["total"] += 1
+        if c["show_hit"]:
+            by_weather[weather]["show_hits"] += 1
+
+        distance = meta.get("distance", 0)
+        if distance < 1400:
+            dist_cat = "短距離(<1400m)"
+        elif distance < 1800:
+            dist_cat = "中距離(1400-1800m)"
+        else:
+            dist_cat = "長距離(>1800m)"
+        by_distance[dist_cat]["total"] += 1
+        if c["show_hit"]:
+            by_distance[dist_cat]["show_hits"] += 1
+
+        if c.get("error_type"):
+            error_types[c["error_type"]] += 1
+
+    result_data = {
+        "date": date,
+        "summary": {
+            "total_races": total_races,
+            "win_hits": win_hits,
+            "win_rate": round(win_hits / total_races * 100, 1) if total_races > 0 else 0,
+            "show_hits": show_hits,
+            "show_rate": round(show_hits / total_races * 100, 1) if total_races > 0 else 0
+        },
+        "by_track_condition": {k: v for k, v in by_track_condition.items()},
+        "by_weather": {k: v for k, v in by_weather.items()},
+        "by_distance": {k: v for k, v in by_distance.items()},
+        "error_types": dict(error_types),
+        "details": comparisons
+    }
+
+    # 結果をファイルに保存
+    output_dir = BASE_DIR / "analysis_reports" / date
+    output_dir.mkdir(parents=True, exist_ok=True)
+    output_file = output_dir / "report.json"
+    with open(output_file, 'w', encoding='utf-8') as f:
+        json.dump(result_data, f, ensure_ascii=False, indent=2)
+
+    return result_data
 
 
 @app.get("/api/analysis/{date}")
