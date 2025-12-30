@@ -6,11 +6,11 @@ GitHub Actionsから自動実行される
   python train.py <競馬場名> <モード>
 
   モード:
-    init   - 初回モデル作成（365日分取得）
+    init   - 初回モデル作成（3年分取得）
     update - モデル再学習（差分のみ取得）
 
   例:
-    python train.py 大井 init    # 初回: 365日分取得してモデル作成
+    python train.py 大井 init    # 初回: 3年分取得してモデル作成
     python train.py 大井 update  # 再学習: 差分のみ取得して再学習
 """
 
@@ -48,7 +48,7 @@ TRACKS = {
     "佐賀": {"code": "55", "model": "models/model_saga.pkl", "data": "data/races_saga.csv"},
 }
 
-INIT_DAYS = 365  # 初回取得日数
+INIT_DAYS = 1095  # 初回取得日数（3年分）
 DELAY = 0.5  # リクエスト間隔
 
 
@@ -446,7 +446,7 @@ def train_track(track_name, track_info, mode='init'):
     競馬場のモデルを学習
 
     mode:
-        'init'   - 初回モデル作成（365日分取得）
+        'init'   - 初回モデル作成（3年分取得）
         'update' - モデル再学習（差分のみ取得）
     """
     print(f"\n{'='*50}")
