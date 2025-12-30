@@ -120,11 +120,16 @@ def check_races_exist(track_code: str, date_str: str) -> bool:
 
 
 def main():
-    # 日付指定（引数 or 今日）
+    # 使い方: python generate_predictions.py [日付] [競馬場コード...]
+    # 例: python generate_predictions.py 2025-12-30 44 45
+
     if len(sys.argv) >= 2:
         date_str = sys.argv[1].replace("-", "")
     else:
         date_str = datetime.now().strftime("%Y%m%d")
+
+    # 競馬場コード指定（オプション）
+    specified_tracks = sys.argv[2:] if len(sys.argv) > 2 else []
 
     date_formatted = f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
     print(f"予測生成: {date_formatted}")
@@ -133,24 +138,35 @@ def main():
     output_dir = BASE_DIR / "predictions" / date_formatted
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    # まず開催中の競馬場を特定（軽量チェック）
-    print("\n開催チェック中...")
-    active_tracks = []
-    for track_code, track_info in TRACKS.items():
-        if check_races_exist(track_code, date_str):
-            active_tracks.append((track_code, track_info))
-            print(f"  ✓ {track_info['name']}: 開催あり")
-        else:
-            print(f"  - {track_info['name']}: 開催なし")
+    # 処理対象の競馬場を決定
+    if specified_tracks:
+        # 競馬場コードが指定された場合、それだけ処理
+        target_tracks = []
+        for code in specified_tracks:
+            if code in TRACKS:
+                target_tracks.append((code, TRACKS[code]))
+                print(f"指定: {TRACKS[code]['name']} ({code})")
+            else:
+                print(f"警告: 無効なコード {code}")
+    else:
+        # 指定なし → 開催中の競馬場を自動検出
+        print("\n開催チェック中...")
+        target_tracks = []
+        for track_code, track_info in TRACKS.items():
+            if check_races_exist(track_code, date_str):
+                target_tracks.append((track_code, track_info))
+                print(f"  ✓ {track_info['name']}: 開催あり")
+            else:
+                print(f"  - {track_info['name']}: 開催なし")
 
-    if not active_tracks:
-        print("\n本日開催の競馬場はありません")
+    if not target_tracks:
+        print("\n処理対象の競馬場がありません")
         return
 
-    print(f"\n{len(active_tracks)}場の予測を生成...")
+    print(f"\n{len(target_tracks)}場の予測を生成...")
 
-    # 開催中の競馬場のみ処理
-    for track_code, track_info in active_tracks:
+    # 対象競馬場を処理
+    for track_code, track_info in target_tracks:
         print(f"\n処理中: {track_info['name']} ({track_code})")
 
         result = generate_predictions_for_track(track_code, date_str)
