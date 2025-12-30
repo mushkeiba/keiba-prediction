@@ -1031,15 +1031,20 @@ def get_odds_only(request: OddsRequest):
         raise HTTPException(status_code=400, detail="無効な競馬場コード")
 
     scraper = NARScraper(track_code, delay=0.2)
-    odds_dict = scraper.get_odds(race_id)
+
+    # 単勝・複勝オッズを一括取得
+    all_odds = scraper.get_all_odds(race_id)
+    win_odds = all_odds.get('win', {})
+    place_odds = all_odds.get('place', {})
 
     # 結果も取得（終了していれば返る、まだなら空）
     result = get_race_result(race_id)
 
     return {
         "race_id": race_id,
-        "odds": odds_dict,
-        "result": result if result else None  # 終了していなければnull
+        "odds": win_odds,
+        "place_odds": place_odds,  # 複勝オッズを追加
+        "result": result if result else None
     }
 
 
