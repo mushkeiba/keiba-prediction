@@ -870,6 +870,69 @@ def get_accuracy_history():
     return {"history": dates[:30]}  # 直近30日分
 
 
+# ========== モデル情報API ==========
+
+@app.get("/api/models/{track_code}")
+def get_model_info(track_code: str):
+    """モデルのメタデータを取得"""
+    if track_code not in TRACKS:
+        raise HTTPException(status_code=400, detail="無効な競馬場コード")
+
+    model_path = TRACKS[track_code]['model']
+    meta_path = model_path.replace('.pkl', '_meta.json')
+    meta_file = BASE_DIR / meta_path
+
+    if meta_file.exists():
+        import json
+        with open(meta_file, 'r', encoding='utf-8') as f:
+            return json.load(f)
+
+    # メタデータJSONがない場合、pklから読み込み試行
+    model_file = BASE_DIR / model_path
+    if model_file.exists():
+        try:
+            with open(model_file, 'rb') as f:
+                data = pickle.load(f)
+            if 'metadata' in data:
+                return data['metadata']
+        except:
+            pass
+
+    raise HTTPException(status_code=404, detail="モデル情報がありません")
+
+
+@app.get("/api/models")
+def get_all_models_info():
+    """全モデルの情報を取得"""
+    models_info = []
+
+    for code, info in TRACKS.items():
+        model_path = info['model']
+        meta_path = model_path.replace('.pkl', '_meta.json')
+        meta_file = BASE_DIR / meta_path
+        model_file = BASE_DIR / model_path
+
+        model_data = {
+            "code": code,
+            "name": info['name'],
+            "emoji": info['emoji'],
+            "model_exists": model_file.exists(),
+            "metadata": None
+        }
+
+        if meta_file.exists():
+            try:
+                import json
+                with open(meta_file, 'r', encoding='utf-8') as f:
+                    model_data["metadata"] = json.load(f)
+            except:
+                pass
+
+        models_info.append(model_data)
+
+    return {"models": models_info}
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

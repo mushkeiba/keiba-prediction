@@ -356,9 +356,22 @@ def train_model(df, features):
     return model, features, auc
 
 
-def save_model(model, features, path):
+def save_model(model, features, path, metadata=None):
+    """モデルとメタデータを保存"""
+    data = {
+        'model': model,
+        'features': features,
+        'metadata': metadata or {}
+    }
     with open(path, 'wb') as f:
-        pickle.dump({'model': model, 'features': features}, f)
+        pickle.dump(data, f)
+
+    # メタデータをJSONでも保存（API用）
+    if metadata:
+        import json
+        meta_path = path.replace('.pkl', '_meta.json')
+        with open(meta_path, 'w', encoding='utf-8') as f:
+            json.dump(metadata, f, ensure_ascii=False, indent=2)
 
 
 # ========== データ収集 ==========
@@ -512,8 +525,26 @@ def train_track(track_name, track_info, mode='init'):
     model, features, auc = train_model(df_processed, processor.features)
     print(f"AUC: {auc:.4f}")
 
+    # メタデータ作成
+    race_dates = df_all['race_date'].dropna().astype(int).astype(str)
+    min_date = race_dates.min() if len(race_dates) > 0 else ""
+    max_date = race_dates.max() if len(race_dates) > 0 else ""
+
+    metadata = {
+        "track_name": track_name,
+        "trained_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "data_count": len(df_all),
+        "race_count": df_all['race_id'].nunique() if 'race_id' in df_all.columns else 0,
+        "date_range": {
+            "from": f"{min_date[:4]}-{min_date[4:6]}-{min_date[6:8]}" if len(min_date) == 8 else "",
+            "to": f"{max_date[:4]}-{max_date[4:6]}-{max_date[6:8]}" if len(max_date) == 8 else ""
+        },
+        "auc": round(auc, 4),
+        "features": features
+    }
+
     # 保存
-    save_model(model, features, model_path)
+    save_model(model, features, model_path, metadata)
     print(f"✅ モデル保存: {model_path}")
 
     return True

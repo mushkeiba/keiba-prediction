@@ -98,7 +98,7 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
-          git add models/*.pkl data/*.csv
+          git add models/*.pkl models/*.json data/*.csv
           git diff --staged --quiet || git commit -m "🤖 ${{ steps.config.outputs.mode }}: ${{ steps.config.outputs.track }} $(date +'%Y-%m-%d')"
           # リモートの変更を取り込んでからプッシュ（コンフリクト回避）
           git pull --rebase origin main || true

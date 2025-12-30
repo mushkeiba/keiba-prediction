@@ -1,6 +1,17 @@
 # CHANGELOG
 
 ## 2025-12-30
+### 機能追加: モデル情報の可視化
+**変更内容**:
+- `train.py` を更新:
+  - モデル保存時にメタデータ（学習日時、データ件数、期間、AUC）も保存
+  - `models/model_xxx_meta.json` にJSON形式で出力
+- `api/main.py` にモデル情報API追加:
+  - `GET /api/models` - 全モデル情報
+  - `GET /api/models/{track_code}` - 個別モデル情報
+- `train.yml` を更新:
+  - メタデータJSONもコミット対象に追加
+
 ### 機能追加: 予測精度の自動計測
 **変更内容**:
 - `evaluate_predictions.py` を新規作成:
