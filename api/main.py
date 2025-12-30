@@ -783,13 +783,12 @@ def get_race_result(race_id: str) -> list:
                 continue
             rank = int(rank_text)
 
-            # 馬番を取得
+            # 馬番を取得（tds[2]が馬番、tds[1]は枠番）
             horse_num = None
-            for td in tds[1:4]:
-                text = td.get_text(strip=True)
-                if text.isdigit() and 1 <= int(text) <= 18:
-                    horse_num = int(text)
-                    break
+            if len(tds) >= 3:
+                umaban_text = tds[2].get_text(strip=True)
+                if umaban_text.isdigit() and 1 <= int(umaban_text) <= 18:
+                    horse_num = int(umaban_text)
 
             if horse_num:
                 results.append({"rank": rank, "number": horse_num})
