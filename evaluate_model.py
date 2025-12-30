@@ -220,39 +220,50 @@ def evaluate_model(model, test_df):
 
 def backtest(df, train_months_list, test_months=3):
     """バックテスト実行"""
+    from datetime import datetime, timedelta
+
     # 日付でソート
     df = df.sort_values('race_date')
 
-    # 日付範囲を取得
-    dates = df['race_date'].unique()
-    if len(dates) < 100:
+    # 日付範囲を取得（実際のカレンダー日付で計算）
+    dates = sorted(df['race_date'].unique())
+    if len(dates) < 50:
         print(f"データが少なすぎます: {len(dates)}日分")
         return []
 
-    # テスト期間: 直近N日
-    test_days = test_months * 30
-    cutoff_idx = len(dates) - test_days
-    test_start_date = dates[cutoff_idx] if cutoff_idx > 0 else dates[0]
+    # 最新日付と最古日付を取得
+    latest_date = dates[-1]  # YYYYMMDD形式
+    oldest_date = dates[0]
+
+    # 日付を datetime に変換
+    latest_dt = datetime.strptime(str(latest_date), '%Y%m%d')
+    oldest_dt = datetime.strptime(str(oldest_date), '%Y%m%d')
+
+    # テスト期間: 直近N ヶ月（実際のカレンダー）
+    test_start_dt = latest_dt - timedelta(days=test_months * 30)
+    test_start_date = int(test_start_dt.strftime('%Y%m%d'))
 
     test_df = df[df['race_date'] >= test_start_date]
 
     print(f"\n【テスト期間】")
-    print(f"  {test_start_date} 〜 {dates[-1]}")
+    print(f"  {test_start_date} 〜 {latest_date}")
     print(f"  レース数: {test_df['race_id'].nunique()}")
     print(f"  データ数: {len(test_df)}")
 
     results = []
 
     for train_months in train_months_list:
-        train_days = train_months * 30
-        train_start_idx = cutoff_idx - train_days
+        # 学習開始日 = テスト開始日 - 学習期間
+        train_start_dt = test_start_dt - timedelta(days=train_months * 30)
+        train_start_date = int(train_start_dt.strftime('%Y%m%d'))
 
-        if train_start_idx < 0:
-            print(f"\n[{train_months}ヶ月] データ不足でスキップ")
+        # データが足りるか確認
+        if train_start_dt < oldest_dt:
+            print(f"\n[{train_months}ヶ月] データ不足でスキップ（{train_start_date} < {oldest_date}）")
             continue
 
-        train_start_date = dates[train_start_idx]
-        train_end_date = dates[cutoff_idx - 1]
+        train_end_dt = test_start_dt - timedelta(days=1)
+        train_end_date = int(train_end_dt.strftime('%Y%m%d'))
 
         train_df = df[(df['race_date'] >= train_start_date) & (df['race_date'] < test_start_date)]
 
