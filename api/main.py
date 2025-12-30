@@ -755,9 +755,53 @@ class OddsRequest(BaseModel):
     track_code: str
 
 
+def get_race_result(race_id: str) -> list:
+    """レース結果（着順）を取得"""
+    url = f"https://nar.netkeiba.com/race/result.html?race_id={race_id}"
+    try:
+        time.sleep(0.2)
+        session = requests.Session()
+        session.headers.update({'User-Agent': 'Mozilla/5.0'})
+        r = session.get(url, timeout=10)
+        r.encoding = 'EUC-JP'
+        soup = BeautifulSoup(r.text, 'lxml')
+
+        results = []
+        table = soup.find('table', class_='RaceTable01')
+        if not table:
+            table = soup.find('table', class_='Result_Table')
+        if not table:
+            return []
+
+        for tr in table.find_all('tr'):
+            tds = tr.find_all('td')
+            if len(tds) < 3:
+                continue
+
+            rank_text = tds[0].get_text(strip=True)
+            if not rank_text.isdigit():
+                continue
+            rank = int(rank_text)
+
+            # 馬番を取得
+            horse_num = None
+            for td in tds[1:4]:
+                text = td.get_text(strip=True)
+                if text.isdigit() and 1 <= int(text) <= 18:
+                    horse_num = int(text)
+                    break
+
+            if horse_num:
+                results.append({"rank": rank, "number": horse_num})
+
+        return sorted(results, key=lambda x: x["rank"])[:3]  # TOP3のみ
+    except:
+        return []
+
+
 @app.post("/api/odds")
 def get_odds_only(request: OddsRequest):
-    """オッズのみ取得（軽量）"""
+    """オッズと結果を取得（レース終了時は結果も含む）"""
     race_id = request.race_id
     track_code = request.track_code
 
@@ -767,9 +811,13 @@ def get_odds_only(request: OddsRequest):
     scraper = NARScraper(track_code, delay=0.2)
     odds_dict = scraper.get_odds(race_id)
 
+    # 結果も取得（終了していれば返る、まだなら空）
+    result = get_race_result(race_id)
+
     return {
         "race_id": race_id,
-        "odds": odds_dict
+        "odds": odds_dict,
+        "result": result if result else None  # 終了していなければnull
     }
 
 
