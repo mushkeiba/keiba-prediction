@@ -1,6 +1,31 @@
 # CHANGELOG
 
 ## 2025-12-30
+### 機能追加: 誤答分析パイプライン（精度向上用）
+**変更内容**:
+- 予測と結果を照合し、どこで外しているかを分析する機能を追加
+
+**追加ファイル**:
+- `api/main.py`: 予測時にログを`prediction_logs/{date}/{race_id}.json`に保存
+- `analyze_results.py`: 結果照合・誤答分析スクリプト
+
+**使い方**:
+```bash
+# レース終了後に実行
+python analyze_results.py 2025-12-30
+```
+
+**分析項目**:
+- 馬場状態別の的中率（良/稍重/重/不良）
+- 天気別の的中率（晴/曇/雨など）
+- 距離別の的中率（短距離/中距離/長距離）
+- 予測確率帯別の的中率（高/中/低）
+- 外れパターン分類（big_miss/moderate_miss/near_miss）
+
+**出力**:
+- コンソールにレポート表示
+- `analysis_reports/{date}/report.json`に詳細保存
+
 ### 機能追加: 特徴量を5つ追加（精度向上目的）
 **変更内容**:
 - Qiita記事（https://qiita.com/umaro_ai/items/d1e0b61f90098ee7fbcb）を参考に特徴量を追加

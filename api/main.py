@@ -12,6 +12,7 @@ import re
 import time
 from datetime import datetime
 import os
+import json
 from pathlib import Path
 
 # プロジェクトのルートディレクトリを取得
@@ -52,6 +53,36 @@ TRACKS = {
 
 # モデルキャッシュ
 model_cache = {}
+
+# ========== 予測ログ保存 ==========
+def save_prediction_log(race_id: str, track_code: str, predictions: list, metadata: dict = None):
+    """予測結果をJSONに保存（後で結果と照合するため）"""
+    try:
+        # 日付を抽出（race_idから）
+        date_str = race_id[:4] + "-" + race_id[6:8] + "-" + race_id[8:10]
+
+        # ディレクトリ作成
+        log_dir = BASE_DIR / "prediction_logs" / date_str
+        log_dir.mkdir(parents=True, exist_ok=True)
+
+        # ログデータ作成
+        log_data = {
+            "race_id": race_id,
+            "track_code": track_code,
+            "track_name": TRACKS.get(track_code, {}).get("name", "不明"),
+            "predicted_at": datetime.now().isoformat(),
+            "predictions": predictions,
+            "metadata": metadata or {}
+        }
+
+        # レースごとにファイル保存
+        log_file = log_dir / f"{race_id}.json"
+        with open(log_file, 'w', encoding='utf-8') as f:
+            json.dump(log_data, f, ensure_ascii=False, indent=2)
+
+        print(f"Prediction log saved: {log_file}")
+    except Exception as e:
+        print(f"Failed to save prediction log: {e}")
 
 # 旧モデル名との互換性
 MODEL_ALIASES = {
@@ -811,6 +842,16 @@ def predict_single_race(request: SingleRaceRequest):
             "expected_value": round(expected_value, 2),
             "is_value": is_value
         })
+
+    # 予測ログを保存（誤答分析用）
+    metadata = {
+        "race_name": race_name,
+        "distance": distance,
+        "track_condition": df['track_condition'].iloc[0] if 'track_condition' in df.columns else "不明",
+        "weather": df['weather'].iloc[0] if 'weather' in df.columns else "不明",
+        "field_size": len(df)
+    }
+    save_prediction_log(race_id, track_code, predictions, metadata)
 
     return {
         "id": race_num,
