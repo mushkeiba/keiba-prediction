@@ -107,13 +107,27 @@ class NARScraper:
             # 発走時刻
             rd = soup.find('div', class_='RaceData01')
             if rd:
-                text = rd.get_text()
-                tm = re.search(r'(\d{1,2}):(\d{2})', text)
+                rd_text = rd.get_text()
+                tm = re.search(r'(\d{1,2}):(\d{2})', rd_text)
                 if tm:
                     info['start_time'] = f"{tm.group(1)}:{tm.group(2)}"
-                dm = re.search(r'(\d{3,4})m', text)
+                dm = re.search(r'(\d{3,4})m', rd_text)
                 if dm:
                     info['distance'] = int(dm.group(1))
+
+                # 馬場状態を抽出（良/稍重/重/不良）
+                track_cond_match = re.search(r'[ダ芝].*?[:：]\s*(良|稍重|重|不良)', rd_text)
+                if track_cond_match:
+                    info['track_condition'] = track_cond_match.group(1)
+                else:
+                    info['track_condition'] = '良'
+
+                # 天気を抽出（晴/曇/雨/小雨/雪）
+                weather_match = re.search(r'天気[:：]\s*(晴|曇|雨|小雨|雪)', rd_text)
+                if weather_match:
+                    info['weather'] = weather_match.group(1)
+                else:
+                    info['weather'] = '晴'
 
             # テーブル取得
             table = soup.find('table', class_='ShutubaTable')
@@ -155,6 +169,26 @@ class NARScraper:
                     m = re.search(r'/jockey/(?:result/recent/)?([a-zA-Z0-9]+)', jockey_link['href'])
                     if m:
                         data['jockey_id'] = m.group(1)
+
+                # 調教師を抽出
+                trainer_link = tr.find('a', href=re.compile(r'/trainer/'))
+                if trainer_link:
+                    data['trainer_name'] = trainer_link.get_text(strip=True)
+                    m = re.search(r'/trainer/(?:result/recent/)?([a-zA-Z0-9]+)', trainer_link['href'])
+                    if m:
+                        data['trainer_id'] = m.group(1)
+
+                # 馬体重を抽出（例: 450(+4), 448(-2), 452）
+                for td in tds:
+                    weight_text = td.get_text(strip=True)
+                    weight_match = re.match(r'^(\d{3,4})(?:\(([+-]?\d+)\))?$', weight_text)
+                    if weight_match and 300 <= int(weight_match.group(1)) <= 600:
+                        data['horse_weight'] = int(weight_match.group(1))
+                        if weight_match.group(2):
+                            data['weight_change'] = int(weight_match.group(2))
+                        else:
+                            data['weight_change'] = 0
+                        break
 
                 for td in tds:
                     text = td.get_text(strip=True)
@@ -423,7 +457,10 @@ class Processor:
             'horse_recent_avg_rank', 'last_rank',
             'jockey_win_rate', 'jockey_place_rate', 'jockey_show_rate',
             'horse_number', 'bracket', 'age', 'weight_carried', 'distance',
-            'sex_encoded', 'track_encoded', 'field_size', 'weight_diff'
+            'sex_encoded', 'track_encoded', 'field_size', 'weight_diff',
+            # 新特徴量
+            'track_condition_encoded', 'weather_encoded',
+            'trainer_encoded', 'horse_weight', 'horse_weight_change'
         ]
 
     def process(self, df):
@@ -432,7 +469,8 @@ class Processor:
                     'field_size', 'horse_runs', 'horse_win_rate', 'horse_place_rate',
                     'horse_show_rate', 'horse_avg_rank', 'horse_recent_win_rate',
                     'horse_recent_show_rate', 'horse_recent_avg_rank', 'last_rank',
-                    'jockey_win_rate', 'jockey_place_rate', 'jockey_show_rate']
+                    'jockey_win_rate', 'jockey_place_rate', 'jockey_show_rate',
+                    'horse_weight', 'weight_change']
         for c in num_cols:
             if c in df.columns:
                 df[c] = pd.to_numeric(df[c], errors='coerce')
@@ -454,6 +492,42 @@ class Processor:
                 df['field_size'] = df.groupby('race_id')['race_id'].transform('count')
             else:
                 df['field_size'] = 12
+
+        # 馬場状態エンコーディング（良=0, 稍重=1, 重=2, 不良=3）
+        if 'track_condition' in df.columns:
+            df['track_condition_encoded'] = df['track_condition'].map(
+                {'良': 0, '稍重': 1, '重': 2, '不良': 3}
+            ).fillna(0)
+        else:
+            df['track_condition_encoded'] = 0
+
+        # 天気エンコーディング（晴=0, 曇=1, 小雨=2, 雨=3, 雪=4）
+        if 'weather' in df.columns:
+            df['weather_encoded'] = df['weather'].map(
+                {'晴': 0, '曇': 1, '小雨': 2, '雨': 3, '雪': 4}
+            ).fillna(0)
+        else:
+            df['weather_encoded'] = 0
+
+        # 調教師エンコーディング（ハッシュベース）
+        if 'trainer_id' in df.columns:
+            df['trainer_encoded'] = df['trainer_id'].apply(
+                lambda x: hash(str(x)) % 10000 if pd.notna(x) else 0
+            )
+        else:
+            df['trainer_encoded'] = 0
+
+        # 馬体重（欠損は450kgで補完）
+        if 'horse_weight' in df.columns:
+            df['horse_weight'] = df['horse_weight'].fillna(450)
+        else:
+            df['horse_weight'] = 450
+
+        # 馬体重増減
+        if 'weight_change' in df.columns:
+            df['horse_weight_change'] = df['weight_change'].fillna(0)
+        else:
+            df['horse_weight_change'] = 0
 
         for f in self.features:
             if f not in df.columns:

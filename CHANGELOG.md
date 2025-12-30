@@ -1,6 +1,30 @@
 # CHANGELOG
 
 ## 2025-12-30
+### 機能追加: 特徴量を5つ追加（精度向上目的）
+**変更内容**:
+- Qiita記事（https://qiita.com/umaro_ai/items/d1e0b61f90098ee7fbcb）を参考に特徴量を追加
+- `train.py` と `api/main.py` の両方を修正
+
+**追加した特徴量**:
+| 特徴量 | 説明 | エンコーディング |
+|--------|------|------------------|
+| track_condition_encoded | 馬場状態（良/稍重/重/不良） | 0-3 |
+| weather_encoded | 天気（晴/曇/小雨/雨/雪） | 0-4 |
+| trainer_encoded | 調教師ID | ハッシュ % 10000 |
+| horse_weight | 馬体重（kg） | 数値（欠損時450） |
+| horse_weight_change | 馬体重増減 | 数値（欠損時0） |
+
+**修正ファイル**:
+- `train.py`:
+  - `get_race_data()`: RaceData01から馬場状態・天気を抽出、テーブルから調教師・馬体重を抽出
+  - `Processor.features`: 新特徴量5つを追加（21個→26個）
+  - `Processor.process()`: エンコーディング処理を追加
+- `api/main.py`:
+  - 同様の修正を適用
+
+**注意**: 新特徴量を反映するには、既存CSVを削除して`init`モードで再学習が必要
+
 ### 改善: 学習データ期間を3年に拡大
 **変更内容**:
 - `train.py` の `INIT_DAYS` を変更:
