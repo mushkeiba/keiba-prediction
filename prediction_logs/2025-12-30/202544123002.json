@@ -1,0 +1,172 @@
+{
+  "race_id": "202544123002",
+  "track_code": "44",
+  "track_name": "大井",
+  "predicted_at": "2025-12-30T22:37:05.622201",
+  "predictions": [
+    {
+      "rank": 1,
+      "number": 2,
+      "name": "リュウグウノユメ",
+      "jockey": "野畑凌",
+      "prob": 0.057,
+      "odds": 2.0,
+      "expected_value": 0.11,
+      "is_value": false
+    },
+    {
+      "rank": 2,
+      "number": 1,
+      "name": "アドリビタム",
+      "jockey": "高野誠毅",
+      "prob": 0.052,
+      "odds": 3.8,
+      "expected_value": 0.2,
+      "is_value": false
+    },
+    {
+      "rank": 3,
+      "number": 3,
+      "name": "リバイブメイラード",
+      "jockey": "瀬川将輝",
+      "prob": 0.036,
+      "odds": 5.6,
+      "expected_value": 0.2,
+      "is_value": false
+    },
+    {
+      "rank": 4,
+      "number": 4,
+      "name": "ウルフスタンド",
+      "jockey": "西啓太",
+      "prob": 0.036,
+      "odds": 7.4,
+      "expected_value": 0.27,
+      "is_value": false
+    },
+    {
+      "rank": 5,
+      "number": 5,
+      "name": "アデニウム",
+      "jockey": "小野俊斗",
+      "prob": 0.027,
+      "odds": 9.2,
+      "expected_value": 0.25,
+      "is_value": false
+    },
+    {
+      "rank": 6,
+      "number": 9,
+      "name": "マジカルレインボー",
+      "jockey": "鷹見陸",
+      "prob": 0.027,
+      "odds": 11.0,
+      "expected_value": 0.29,
+      "is_value": false
+    },
+    {
+      "rank": 7,
+      "number": 10,
+      "name": "ハルウララカ",
+      "jockey": "吉原寛人",
+      "prob": 0.027,
+      "odds": 12.8,
+      "expected_value": 0.34,
+      "is_value": false
+    },
+    {
+      "rank": 8,
+      "number": 6,
+      "name": "ラッキークラウン",
+      "jockey": "矢野貴之",
+      "prob": 0.026,
+      "odds": 14.6,
+      "expected_value": 0.39,
+      "is_value": false
+    },
+    {
+      "rank": 9,
+      "number": 8,
+      "name": "プラウドメアリー",
+      "jockey": "藤本現暉",
+      "prob": 0.026,
+      "odds": 16.4,
+      "expected_value": 0.43,
+      "is_value": false
+    },
+    {
+      "rank": 10,
+      "number": 7,
+      "name": "マルカンプレスト",
+      "jockey": "江里口裕",
+      "prob": 0.025,
+      "odds": 18.2,
+      "expected_value": 0.45,
+      "is_value": false
+    },
+    {
+      "rank": 11,
+      "number": 11,
+      "name": "レナ",
+      "jockey": "佐野遥久",
+      "prob": 0.021,
+      "odds": 20.0,
+      "expected_value": 0.42,
+      "is_value": false
+    },
+    {
+      "rank": 12,
+      "number": 12,
+      "name": "アウスラフラッグ",
+      "jockey": "藤田凌",
+      "prob": 0.02,
+      "odds": 21.8,
+      "expected_value": 0.44,
+      "is_value": false
+    },
+    {
+      "rank": 13,
+      "number": 13,
+      "name": "バリアシオン",
+      "jockey": "岡村健司",
+      "prob": 0.018,
+      "odds": 23.6,
+      "expected_value": 0.43,
+      "is_value": false
+    },
+    {
+      "rank": 14,
+      "number": 14,
+      "name": "ライウ",
+      "jockey": "保園翔也",
+      "prob": 0.014,
+      "odds": 25.4,
+      "expected_value": 0.34,
+      "is_value": false
+    },
+    {
+      "rank": 15,
+      "number": 15,
+      "name": "リケアドアーズ",
+      "jockey": "横川怜央",
+      "prob": 0.013,
+      "odds": 27.2,
+      "expected_value": 0.36,
+      "is_value": false
+    },
+    {
+      "rank": 16,
+      "number": 16,
+      "name": "ソリタリオカズ",
+      "jockey": "谷内貫太",
+      "prob": 0.013,
+      "odds": 29.0,
+      "expected_value": 0.38,
+      "is_value": false
+    }
+  ],
+  "metadata": {
+    "race_name": "3歳三四",
+    "field_size": 16
+  }
+}

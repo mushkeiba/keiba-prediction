@@ -1,0 +1,59 @@
+{
+  "date": "2025-12-30",
+  "total_races": 3,
+  "win": {
+    "bets": 300,
+    "hits": 0,
+    "payout": 0
+  },
+  "show": {
+    "bets": 300,
+    "hits": 1,
+    "payout": 110
+  },
+  "value_win": {
+    "bets": 0,
+    "hits": 0,
+    "payout": 0
+  },
+  "value_show": {
+    "bets": 0,
+    "hits": 0,
+    "payout": 0
+  },
+  "details": [
+    {
+      "race_id": "202544123001",
+      "horse_num": 2,
+      "horse_name": "イサゴールド",
+      "prob": 0.057,
+      "odds": 2.0,
+      "is_value": false,
+      "actual_rank": 8,
+      "win_hit": false,
+      "show_hit": false
+    },
+    {
+      "race_id": "202544123002",
+      "horse_num": 2,
+      "horse_name": "リュウグウノユメ",
+      "prob": 0.057,
+      "odds": 2.0,
+      "is_value": false,
+      "actual_rank": 8,
+      "win_hit": false,
+      "show_hit": false
+    },
+    {
+      "race_id": "202544123003",
+      "horse_num": 2,
+      "horse_name": "トゥーナウィッシュ",
+      "prob": 0.057,
+      "odds": 2.0,
+      "is_value": false,
+      "actual_rank": 3,
+      "win_hit": false,
+      "show_hit": true
+    }
+  ]
+}

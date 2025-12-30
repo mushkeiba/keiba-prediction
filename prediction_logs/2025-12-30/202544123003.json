@@ -1,0 +1,92 @@
+{
+  "race_id": "202544123003",
+  "track_code": "44",
+  "track_name": "大井",
+  "predicted_at": "2025-12-30T22:37:06.385857",
+  "predictions": [
+    {
+      "rank": 1,
+      "number": 2,
+      "name": "トゥーナウィッシュ",
+      "jockey": "桑村真明",
+      "prob": 0.057,
+      "odds": 2.0,
+      "expected_value": 0.11,
+      "is_value": false
+    },
+    {
+      "rank": 2,
+      "number": 1,
+      "name": "ルビーシールズ",
+      "jockey": "鷹見陸",
+      "prob": 0.052,
+      "odds": 3.8,
+      "expected_value": 0.2,
+      "is_value": false
+    },
+    {
+      "rank": 3,
+      "number": 5,
+      "name": "カンタベリータイム",
+      "jockey": "佐野遥久",
+      "prob": 0.029,
+      "odds": 5.6,
+      "expected_value": 0.16,
+      "is_value": false
+    },
+    {
+      "rank": 4,
+      "number": 3,
+      "name": "ブイスリー",
+      "jockey": "和田譲治",
+      "prob": 0.027,
+      "odds": 7.4,
+      "expected_value": 0.2,
+      "is_value": false
+    },
+    {
+      "rank": 5,
+      "number": 4,
+      "name": "グランマローネ",
+      "jockey": "藤本現暉",
+      "prob": 0.026,
+      "odds": 9.2,
+      "expected_value": 0.24,
+      "is_value": false
+    },
+    {
+      "rank": 6,
+      "number": 6,
+      "name": "エクセレンティ",
+      "jockey": "安藤洋一",
+      "prob": 0.026,
+      "odds": 11.0,
+      "expected_value": 0.29,
+      "is_value": false
+    },
+    {
+      "rank": 7,
+      "number": 7,
+      "name": "アストラルゲート",
+      "jockey": "岡村健司",
+      "prob": 0.02,
+      "odds": 12.8,
+      "expected_value": 0.25,
+      "is_value": false
+    },
+    {
+      "rank": 8,
+      "number": 8,
+      "name": "ワイルドノブクン",
+      "jockey": "中山遥人",
+      "prob": 0.019,
+      "odds": 14.6,
+      "expected_value": 0.28,
+      "is_value": false
+    }
+  ],
+  "metadata": {
+    "race_name": "2歳一二",
+    "field_size": 8
+  }
+}
