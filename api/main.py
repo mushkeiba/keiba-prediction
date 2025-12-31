@@ -955,6 +955,30 @@ def load_model(track_code: str):
     return None, None
 
 
+def predict_with_model(model, X):
+    """モデルで予測（アンサンブル対応）"""
+    if isinstance(model, dict):
+        # アンサンブルモデルの場合
+        model_type = model.get('type', 'ensemble')
+        if model_type == 'ensemble':
+            lgb_pred = model['lgb'].predict(X)
+            xgb_pred = model['xgb'].predict(X)
+            return (lgb_pred + xgb_pred) / 2
+        elif model_type == 'xgb':
+            return model['xgb'].predict(X)
+        elif model_type == 'lgb':
+            return model['lgb'].predict(X)
+        else:
+            # フォールバック: 最初に見つかったモデルを使用
+            for key in ['lgb', 'xgb', 'model']:
+                if key in model:
+                    return model[key].predict(X)
+            raise ValueError(f"Unknown model type: {model_type}")
+    else:
+        # 単一モデルの場合
+        return model.predict(X)
+
+
 # ========== APIエンドポイント ==========
 
 @app.get("/")
@@ -1056,7 +1080,7 @@ def predict(request: PredictRequest):
 
         # 予測
         X = df[model_features].fillna(-1)
-        df['prob'] = model.predict(X)
+        df['prob'] = predict_with_model(model, X)
         df['pred_rank'] = df['prob'].rank(ascending=False, method='min').astype(int)
         df = df.sort_values('prob', ascending=False)
 
@@ -1223,7 +1247,7 @@ def predict_single_race(request: SingleRaceRequest):
 
     # 予測
     X = df[model_features].fillna(-1)
-    df['prob'] = model.predict(X)
+    df['prob'] = predict_with_model(model, X)
     df['pred_rank'] = df['prob'].rank(ascending=False, method='min').astype(int)
     df = df.sort_values('prob', ascending=False)
 

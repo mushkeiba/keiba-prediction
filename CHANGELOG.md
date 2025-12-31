@@ -2,6 +2,22 @@
 
 ## 2025-12-31
 
+### 修正: アンサンブルモデルの予測エラー
+
+**問題**: リアルタイム予測で`'dict' object has no attribute 'predict'`エラー
+
+**原因**: train.pyでアンサンブル学習をすると、モデルがdict形式で保存される：
+```python
+{'lgb': lgb_model, 'xgb': xgb_model, 'type': 'ensemble'}
+```
+main.pyでは単一モデルとして`model.predict(X)`を呼んでいた
+
+**変更内容**: `api/main.py` に `predict_with_model()` ヘルパー関数を追加
+- アンサンブル（LightGBM + XGBoost平均）対応
+- 単一モデル（LightGBMのみ）もそのまま動作
+
+---
+
 ### 修正: リアルタイム予測時の特徴量欠損エラー
 
 **問題**: リアルタイム予測（`/api/predict/race`）で500エラーが発生
