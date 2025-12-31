@@ -224,10 +224,17 @@ class NARScraper:
             soup = BeautifulSoup(r.text, 'lxml')
 
             results = []
+            race_dates = []  # 前走日を取得
             for tr in soup.find_all('tr'):
                 tds = tr.find_all('td')
                 if len(tds) < 6:
                     continue
+
+                # 日付を取得（最初の列）
+                date_text = tds[0].get_text(strip=True)
+                if re.match(r'\d{4}[./]\d{1,2}[./]\d{1,2}', date_text):
+                    race_dates.append(date_text.replace('.', '/'))
+
                 for td in tds[3:7]:
                     t = td.get_text(strip=True)
                     if t.isdigit() and 1 <= int(t) <= 20:
@@ -237,6 +244,11 @@ class NARScraper:
                     break
 
             stats = self._calc_stats(results)
+            # 最新のレース日を追加
+            if race_dates:
+                stats['last_race_date'] = race_dates[0]
+            else:
+                stats['last_race_date'] = None
             self.horse_cache[horse_id] = stats
             return stats
         except:
@@ -327,7 +339,8 @@ class NARScraper:
             'horse_runs': 0, 'horse_win_rate': 0, 'horse_place_rate': 0,
             'horse_show_rate': 0, 'horse_avg_rank': 10,
             'horse_recent_win_rate': 0, 'horse_recent_show_rate': 0,
-            'horse_recent_avg_rank': 10, 'last_rank': 10
+            'horse_recent_avg_rank': 10, 'last_rank': 10,
+            'last_race_date': None
         }
 
     def enrich_with_history(self, df):
@@ -499,8 +512,10 @@ class Processor:
             df['horse_avg_rank_vs_field'] = 0
 
         # === 休養日数 ===
-        # CSVにlast_race_dateがあれば計算、なければ0
-        if 'last_race_date' in df.columns and 'race_date' in df.columns:
+        # CSVにdays_since_last_raceがあればそれを使用
+        if 'days_since_last_race' in df.columns:
+            df['days_since_last_race'] = df['days_since_last_race'].fillna(30).clip(0, 365)
+        elif 'last_race_date' in df.columns and 'race_date' in df.columns:
             df['days_since_last_race'] = (pd.to_datetime(df['race_date']) - pd.to_datetime(df['last_race_date'])).dt.days
             df['days_since_last_race'] = df['days_since_last_race'].fillna(30).clip(0, 365)
         else:

@@ -1,13 +1,13 @@
 {
   "track_name": "大井",
-  "trained_at": "2025-12-31 13:19:23",
+  "trained_at": "2025-12-31 13:33:03",
   "data_count": 41237,
   "race_count": 3397,
   "date_range": {
     "from": "2022-12-31",
     "to": "2025-12-29"
   },
-  "auc": 0.7571,
+  "auc": 0.7565,
   "features": [
     "horse_runs",
     "horse_win_rate",
