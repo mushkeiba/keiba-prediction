@@ -2,18 +2,30 @@
 
 ## 2025-12-31
 
+### 改善: Optuna最適化 + 不要特徴量削除
+**変更内容**:
+- Optunaで30回試行してハイパーパラメータを最適化
+- 重要度の低い特徴量を削除（distance_category: 15.3, horse_position: 5.1）
+- AUC: 0.7446 → **0.7465**
+
+**最適化パラメータ**:
+```python
+num_leaves: 112, learning_rate: 0.067, min_child_samples: 65
+feature_fraction: 0.78, bagging_fraction: 0.78, bagging_freq: 3
+```
+
+---
+
 ### 改善: 大井モデルを計算特徴量付きで再学習
 **変更内容**:
 - 騎手成績（勝率、連対率、複勝率）を全41,237件に反映
-- 計算特徴量5つを学習に追加
+- 計算特徴量3つを学習に追加
 - モデルAUC: 0.7446
 
 **追加した計算特徴量**:
 - `horse_number_ratio`: 馬番/出走頭数
-- `distance_category`: 距離区分（短/中/長）
 - `last_rank_diff`: 前走着順 - 平均着順
 - `win_rate_rank`: レース内の勝率順位
-- `horse_position`: 馬番位置（内/中/外）
 
 ---
 
