@@ -103,8 +103,12 @@ class NARScraper:
         self.delay = delay
         self.session = requests.Session()
         self.session.headers.update({'User-Agent': 'Mozilla/5.0'})
+        self.session.verify = False  # SSL証明書検証をスキップ
         self.horse_cache = {}
         self.jockey_cache = {}
+        # SSL警告を抑制
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     def _fetch(self, url, encoding='EUC-JP'):
         time.sleep(self.delay)
