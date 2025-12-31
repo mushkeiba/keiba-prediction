@@ -400,70 +400,118 @@ if st.sidebar.button('🔍 予測実行', type='primary'):
         st.error(f'⚠️ {track_name}のモデルがありません')
         st.info(f'Colabで{track_name}のモデルを学習して、{track_info["model"]}をアップロードしてください')
     else:
-        scraper = NARScraper(track_info['code'], delay=0.5)
-        processor = Processor()
+        # JSONファイルのパスを確認
+        import json
+        date_formatted = target_date.strftime('%Y-%m-%d')
+        json_path = f"predictions/{date_formatted}/{track_info['code']}.json"
 
-        with st.spinner(f'{target_date.strftime("%Y/%m/%d")} {track_name}のレースを取得中...'):
-            race_ids = scraper.get_race_list_by_date(date_str)
+        # JSONが存在すれば読み込み、なければスクレイピング
+        if os.path.exists(json_path):
+            # === JSON読み込みモード ===
+            with open(json_path, 'r', encoding='utf-8') as f:
+                cached_data = json.load(f)
 
-        if not race_ids:
-            st.warning(f'{track_name}のレースが見つかりません。日付を確認してください。')
+            generated_at = cached_data.get('generated_at', '不明')
+            st.success(f'✅ 事前生成データを使用（生成時刻: {generated_at[:16]}）')
+            st.info(f'{track_name}: {len(cached_data["races"])}レース')
+
+            for race in cached_data['races']:
+                st.subheader(f'🏁 {race["name"]}')
+                if race.get('time'):
+                    st.caption(f'発走: {race["time"]} / {race["distance"]}m / {race["field_size"]}頭')
+
+                # 結果表示
+                cols = st.columns(3)
+                for i, pred in enumerate(race['predictions'][:3]):
+                    with cols[i]:
+                        medal = ['🥇', '🥈', '🥉'][i]
+                        st.metric(
+                            label=f"{medal} {i+1}位予測",
+                            value=f"{pred['number']}番 {pred['name']}",
+                            delta=f"確率: {pred['prob']:.1%}"
+                        )
+                        st.caption(f"勝率: {pred['win_rate']:.0f}% / 複勝率: {pred['show_rate']:.0f}%")
+
+                # 全馬一覧（折りたたみ）
+                with st.expander('全馬一覧'):
+                    display_data = [{
+                        '予測順位': p['rank'],
+                        '馬番': p['number'],
+                        '馬名': p['name'],
+                        '騎手': p['jockey'],
+                        '確率': f"{p['prob']:.1%}"
+                    } for p in race['predictions']]
+                    st.dataframe(pd.DataFrame(display_data), hide_index=True)
+
+                st.markdown('---')
         else:
-            st.success(f'{track_name}: {len(race_ids)}レース発見！')
+            # === スクレイピングモード（JSONがない場合） ===
+            st.warning(f'⚠️ 事前生成データがありません。リアルタイム取得します...')
 
-            # 全レース処理
-            for rid in sorted(race_ids):
-                with st.spinner(f'レース {rid} を処理中...'):
-                    df = scraper.get_race_data(rid)
-                    if df is None:
-                        st.warning(f'{rid}: データ取得失敗')
-                        continue
+            scraper = NARScraper(track_info['code'], delay=0.5)
+            processor = Processor()
 
-                    # 進捗表示用
-                    progress_bar = st.progress(0)
-                    status_text = st.empty()
+            with st.spinner(f'{target_date.strftime("%Y/%m/%d")} {track_name}のレースを取得中...'):
+                race_ids = scraper.get_race_list_by_date(date_str)
 
-                    def update_progress(pct, msg):
-                        progress_bar.progress(pct)
-                        status_text.text(msg)
+            if not race_ids:
+                st.warning(f'{track_name}のレースが見つかりません。日付を確認してください。')
+            else:
+                st.success(f'{track_name}: {len(race_ids)}レース発見！')
 
-                    df = scraper.enrich_data(df, update_progress)
-                    progress_bar.empty()
-                    status_text.empty()
+                # 全レース処理
+                for rid in sorted(race_ids):
+                    with st.spinner(f'レース {rid} を処理中...'):
+                        df = scraper.get_race_data(rid)
+                        if df is None:
+                            st.warning(f'{rid}: データ取得失敗')
+                            continue
 
-                    df = processor.process(df)
+                        # 進捗表示用
+                        progress_bar = st.progress(0)
+                        status_text = st.empty()
 
-                    # 予測
-                    X = df[model_features].fillna(-1)
-                    df['prob'] = model.predict(X)
-                    df['pred_rank'] = df['prob'].rank(ascending=False, method='min').astype(int)
-                    df = df.sort_values('prob', ascending=False)
+                        def update_progress(pct, msg):
+                            progress_bar.progress(pct)
+                            status_text.text(msg)
 
-                    # レース名表示
-                    race_name = df['race_name'].iloc[0] if 'race_name' in df.columns else rid
-                    st.subheader(f'🏁 {race_name}')
+                        df = scraper.enrich_data(df, update_progress)
+                        progress_bar.empty()
+                        status_text.empty()
 
-                    # 結果表示
-                    cols = st.columns(3)
-                    for i, (_, row) in enumerate(df.head(3).iterrows()):
-                        with cols[i]:
-                            medal = ['🥇', '🥈', '🥉'][i]
-                            num = int(row['horse_number']) if pd.notna(row.get('horse_number')) else '-'
-                            st.metric(
-                                label=f"{medal} {i+1}位予測",
-                                value=f"{num}番 {row.get('horse_name', '?')}",
-                                delta=f"確率: {row['prob']:.1%}"
-                            )
-                            st.caption(f"勝率: {row.get('horse_win_rate', 0)*100:.0f}% / 複勝率: {row.get('horse_show_rate', 0)*100:.0f}%")
+                        df = processor.process(df)
 
-                    # 全馬一覧（折りたたみ）
-                    with st.expander('全馬一覧'):
-                        display_df = df[['pred_rank', 'horse_number', 'horse_name', 'jockey_name', 'prob']].copy()
-                        display_df.columns = ['予測順位', '馬番', '馬名', '騎手', '確率']
-                        display_df['確率'] = display_df['確率'].apply(lambda x: f'{x:.1%}')
-                        st.dataframe(display_df, hide_index=True)
+                        # 予測
+                        X = df[model_features].fillna(-1)
+                        df['prob'] = model.predict(X)
+                        df['pred_rank'] = df['prob'].rank(ascending=False, method='min').astype(int)
+                        df = df.sort_values('prob', ascending=False)
 
-                    st.markdown('---')
+                        # レース名表示
+                        race_name = df['race_name'].iloc[0] if 'race_name' in df.columns else rid
+                        st.subheader(f'🏁 {race_name}')
+
+                        # 結果表示
+                        cols = st.columns(3)
+                        for i, (_, row) in enumerate(df.head(3).iterrows()):
+                            with cols[i]:
+                                medal = ['🥇', '🥈', '🥉'][i]
+                                num = int(row['horse_number']) if pd.notna(row.get('horse_number')) else '-'
+                                st.metric(
+                                    label=f"{medal} {i+1}位予測",
+                                    value=f"{num}番 {row.get('horse_name', '?')}",
+                                    delta=f"確率: {row['prob']:.1%}"
+                                )
+                                st.caption(f"勝率: {row.get('horse_win_rate', 0)*100:.0f}% / 複勝率: {row.get('horse_show_rate', 0)*100:.0f}%")
+
+                        # 全馬一覧（折りたたみ）
+                        with st.expander('全馬一覧'):
+                            display_df = df[['pred_rank', 'horse_number', 'horse_name', 'jockey_name', 'prob']].copy()
+                            display_df.columns = ['予測順位', '馬番', '馬名', '騎手', '確率']
+                            display_df['確率'] = display_df['確率'].apply(lambda x: f'{x:.1%}')
+                            st.dataframe(display_df, hide_index=True)
+
+                        st.markdown('---')
 
 # モデル状況一覧
 st.sidebar.markdown('---')
