@@ -2,6 +2,26 @@
 
 ## 2025-12-31
 
+### 修正: リアルタイム予測時の特徴量欠損エラー
+
+**問題**: リアルタイム予測（`/api/predict/race`）で500エラーが発生
+```
+KeyError: "['jockey_track_interaction', 'trainer_distance_interaction', ...] not in index"
+```
+
+**原因**:
+- `main.py` の `Processor` クラスと `train.py` の `Processor` クラスが別々に実装されていた
+- 学習時に使われる特徴量（交互作用、連勝数、血統など）が推論時に生成されていなかった
+
+**変更内容**: `api/main.py` の `Processor.process()` に欠損していた特徴量生成ロジックを追加
+- 交互作用特徴量: `jockey_track_interaction`, `trainer_distance_interaction`, `jockey_distance_interaction`
+- 時系列特徴量: `win_streak`, `show_streak`, `recent_3_avg_rank`, `recent_10_avg_rank`, `rank_improvement`
+- 血統特徴量: `father_win_rate`, `father_show_rate`, `bms_win_rate`, `bms_show_rate`
+
+**教訓**: 学習と推論で同じ特徴量生成ロジックを使うべき
+
+---
+
 ### 改善: スクレイピング対策を強化
 
 **変更内容**: `api/main.py` のスクレイパーを強化

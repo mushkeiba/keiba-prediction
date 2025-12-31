@@ -857,6 +857,70 @@ class Processor:
         else:
             df['rank_trend'] = 0
 
+        # === 交互作用特徴量（train.pyと同じロジック）===
+        # 騎手×競馬場の相性（ハッシュベース）
+        if 'jockey_id' in df.columns and 'race_id' in df.columns:
+            df['track_code'] = df['race_id'].astype(str).str[4:6]
+            df['jockey_track_interaction'] = df.apply(
+                lambda x: hash(str(x.get('jockey_id', '')) + str(x.get('track_code', ''))) % 10000, axis=1
+            )
+        else:
+            df['jockey_track_interaction'] = 0
+
+        # 調教師×距離の相性
+        if 'trainer_id' in df.columns and 'distance' in df.columns:
+            df['distance_cat'] = df['distance'].apply(
+                lambda d: 'short' if pd.notna(d) and d < 1400 else ('long' if pd.notna(d) and d >= 1800 else 'mid')
+            )
+            df['trainer_distance_interaction'] = df.apply(
+                lambda x: hash(str(x.get('trainer_id', '')) + str(x.get('distance_cat', ''))) % 10000, axis=1
+            )
+        else:
+            df['trainer_distance_interaction'] = 0
+
+        # 騎手×距離の相性
+        if 'jockey_id' in df.columns and 'distance' in df.columns:
+            if 'distance_cat' not in df.columns:
+                df['distance_cat'] = df['distance'].apply(
+                    lambda d: 'short' if pd.notna(d) and d < 1400 else ('long' if pd.notna(d) and d >= 1800 else 'mid')
+                )
+            df['jockey_distance_interaction'] = df.apply(
+                lambda x: hash(str(x.get('jockey_id', '')) + str(x.get('distance_cat', ''))) % 10000, axis=1
+            )
+        else:
+            df['jockey_distance_interaction'] = 0
+
+        # === 時系列強化特徴量 ===
+        # 連勝数（CSVにあれば使用、なければ0）
+        if 'win_streak' not in df.columns:
+            df['win_streak'] = 0
+        if 'show_streak' not in df.columns:
+            df['show_streak'] = 0
+
+        # 直近3走・10走平均着順
+        if 'recent_3_avg_rank' not in df.columns:
+            if 'horse_recent_avg_rank' in df.columns:
+                df['recent_3_avg_rank'] = df['horse_recent_avg_rank']
+            else:
+                df['recent_3_avg_rank'] = 10
+        if 'recent_10_avg_rank' not in df.columns:
+            if 'horse_avg_rank' in df.columns:
+                df['recent_10_avg_rank'] = df['horse_avg_rank']
+            else:
+                df['recent_10_avg_rank'] = 10
+
+        # 着順改善トレンド
+        if 'recent_3_avg_rank' in df.columns and 'horse_avg_rank' in df.columns:
+            df['rank_improvement'] = df['horse_avg_rank'] - df['recent_3_avg_rank']
+            df['rank_improvement'] = df['rank_improvement'].fillna(0)
+        else:
+            df['rank_improvement'] = 0
+
+        # === 血統特徴量 ===
+        for col in ['father_win_rate', 'father_show_rate', 'bms_win_rate', 'bms_show_rate']:
+            if col not in df.columns:
+                df[col] = 0
+
         for f in self.features:
             if f not in df.columns:
                 df[f] = 0
