@@ -19,6 +19,37 @@ from pathlib import Path
 from collections import defaultdict
 import asyncio
 
+# ========== モデル用カスタムクラス ==========
+# pickleでモデルを読み込む際に必要
+class TargetEncoderSafe:
+    """リークしないTarget Encoder（学習データのみで統計作成）"""
+
+    def __init__(self, smoothing=10):
+        self.smoothing = smoothing
+        self.global_mean = None
+        self.mappings = {}
+
+    def fit(self, train_df, cols, target):
+        """学習データのみで統計を作成"""
+        self.global_mean = train_df[target].mean()
+
+        for col in cols:
+            stats = train_df.groupby(col)[target].agg(['mean', 'count'])
+            smooth_mean = (stats['mean'] * stats['count'] + self.global_mean * self.smoothing) / \
+                         (stats['count'] + self.smoothing)
+            self.mappings[col] = smooth_mean.to_dict()
+
+        return self
+
+    def transform(self, df, cols):
+        """学習データの統計でテストデータを変換"""
+        df = df.copy()
+        for col in cols:
+            te_col = f'{col}_te'
+            df[te_col] = df[col].map(self.mappings.get(col, {})).fillna(self.global_mean)
+        return df
+
+
 # プロジェクトのルートディレクトリを取得
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -1091,6 +1122,10 @@ def load_model(track_code: str):
     paths_to_try = [model_name]
     if model_name in MODEL_ALIASES:
         paths_to_try = MODEL_ALIASES[model_name]
+
+    # pickleでカスタムクラスを読み込めるよう__main__に登録
+    import __main__
+    __main__.TargetEncoderSafe = TargetEncoderSafe
 
     for model_name in paths_to_try:
         model_path = BASE_DIR / model_name
