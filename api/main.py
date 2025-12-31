@@ -58,6 +58,40 @@ TRACKS = {
 # モデルキャッシュ
 model_cache = {}
 
+# ========== 回収率ベース買い目設定 ==========
+# バックテスト結果から算出した、回収率100%達成に必要な最低複勝オッズ
+# 的中率から計算: 必要オッズ = 1 / 的中率
+MIN_PLACE_ODDS_FOR_ROI = {
+    "44": 1.5,   # 大井: 複勝68.3% → 1/0.683 = 1.46 → 余裕見て1.5
+    "45": 1.8,   # 川崎: 複勝55.8% → 1/0.558 = 1.79 → 1.8
+    "43": 2.0,   # 船橋: データ不足、保守的に2.0
+    "42": 2.0,   # 浦和: データ不足、保守的に2.0
+    "30": 2.0,   # 門別
+    "35": 2.0,   # 盛岡
+    "36": 2.0,   # 水沢
+    "46": 2.0,   # 金沢
+    "47": 2.0,   # 笠松
+    "48": 2.0,   # 名古屋
+    "50": 2.0,   # 園田
+    "51": 2.0,   # 姫路
+    "54": 2.0,   # 高知
+    "55": 2.0,   # 佐賀
+}
+
+# 賭け金計算（期待値に応じた可変金額）
+def calculate_bet_amount(expected_value: float, base_bet: int = 100) -> int:
+    """期待値に応じた賭け金を計算"""
+    if expected_value <= 1.0:
+        return 0  # 期待値1.0以下は買わない
+    elif expected_value <= 1.2:
+        return base_bet  # 100円
+    elif expected_value <= 1.5:
+        return base_bet * 2  # 200円
+    elif expected_value <= 2.0:
+        return base_bet * 3  # 300円
+    else:
+        return base_bet * 5  # 500円（期待値2.0超）
+
 # ========== 予測ログ保存 ==========
 def save_prediction_log(race_id: str, track_code: str, predictions: list, metadata: dict = None):
     """予測結果をJSONに保存（後で結果と照合するため）"""
@@ -1115,15 +1149,21 @@ def predict(request: PredictRequest):
             # 妙味判定: 期待値 > 1.0 なら黒字期待
             is_value = expected_value > 1.0
 
-            # 層別買い目判定（確率ベース＝オッズ変動に左右されない）
+            # ========== 回収率ベース買い目判定 ==========
+            # バックテスト結果: 予測1位のみを対象、オッズ条件で回収率100%+を狙う
             bet_layer = None
             recommended_bet = 0
-            if prob >= 0.60:  # 本命層: 60%以上はオッズ関係なく買い
-                bet_layer = "honmei"
-                recommended_bet = 500
-            elif prob >= 0.40 and effective_place_odds >= 3.0:  # 穴馬層: 40-60%で高オッズ
-                bet_layer = "ana"
-                recommended_bet = 300
+            min_odds = MIN_PLACE_ODDS_FOR_ROI.get(track_code, 2.0)
+
+            if i == 0:  # 予測1位のみ対象（バックテストと同じ条件）
+                if effective_place_odds >= min_odds:
+                    # 回収率100%以上が期待できる
+                    bet_layer = "roi_buy"
+                    recommended_bet = calculate_bet_amount(expected_value)
+                elif effective_place_odds > 0:
+                    # オッズ不足だが参考表示
+                    bet_layer = "watch"
+                    recommended_bet = 0
 
             predictions.append({
                 "rank": i + 1,
@@ -1152,15 +1192,19 @@ def predict(request: PredictRequest):
             "predictions": predictions
         })
 
-    # 層別買い目サマリー作成
+    # ========== 回収率ベース買い目サマリー ==========
+    min_odds = MIN_PLACE_ODDS_FOR_ROI.get(track_code, 2.0)
     betting_picks = {
-        "honmei": [],  # 本命層（確率60%以上）
-        "ana": [],     # 穴馬層（確率40-60%でオッズ3倍以上）
-        "total_bet": 0
+        "roi_buy": [],   # 回収率100%+期待（予測1位 & オッズ条件クリア）
+        "watch": [],     # 様子見（予測1位だがオッズ不足）
+        "total_bet": 0,
+        "expected_return": 0,  # 期待リターン
+        "min_odds_required": min_odds,  # この競馬場の必要最低オッズ
+        "strategy": f"複勝オッズ{min_odds}倍以上のみ購入"
     }
     for race in results:
         for pred in race["predictions"]:
-            if pred["bet_layer"]:
+            if pred["bet_layer"] in ["roi_buy", "watch"]:
                 pick = {
                     "race_id": race["id"],
                     "race_name": race["name"],
@@ -1169,10 +1213,14 @@ def predict(request: PredictRequest):
                     "name": pred["name"],
                     "prob": pred["prob"],
                     "place_odds": pred["place_odds"],
-                    "recommended_bet": pred["recommended_bet"]
+                    "expected_value": pred["expected_value"],
+                    "recommended_bet": pred["recommended_bet"],
+                    "reason": "オッズ条件クリア" if pred["bet_layer"] == "roi_buy" else f"オッズ{min_odds}倍未満"
                 }
                 betting_picks[pred["bet_layer"]].append(pick)
-                betting_picks["total_bet"] += pred["recommended_bet"]
+                if pred["bet_layer"] == "roi_buy":
+                    betting_picks["total_bet"] += pred["recommended_bet"]
+                    betting_picks["expected_return"] += pred["recommended_bet"] * pred["expected_value"]
 
     return {
         "track": {
@@ -1279,15 +1327,18 @@ def predict_single_race(request: SingleRaceRequest):
         expected_value = prob * effective_place_odds if effective_place_odds > 0 else 0
         is_value = expected_value > 1.0
 
-        # 層別買い目判定（確率ベース＝オッズ変動に左右されない）
+        # ========== 回収率ベース買い目判定 ==========
         bet_layer = None
         recommended_bet = 0
-        if prob >= 0.60:  # 本命層: 60%以上はオッズ関係なく買い
-            bet_layer = "honmei"
-            recommended_bet = 500
-        elif prob >= 0.40 and effective_place_odds >= 3.0:  # 穴馬層: 40-60%で高オッズ
-            bet_layer = "ana"
-            recommended_bet = 300
+        min_odds = MIN_PLACE_ODDS_FOR_ROI.get(track_code, 2.0)
+
+        if i == 0:  # 予測1位のみ対象（バックテストと同じ条件）
+            if effective_place_odds >= min_odds:
+                bet_layer = "roi_buy"
+                recommended_bet = calculate_bet_amount(expected_value)
+            elif effective_place_odds > 0:
+                bet_layer = "watch"
+                recommended_bet = 0
 
         predictions.append({
             "rank": i + 1,
@@ -1317,23 +1368,30 @@ def predict_single_race(request: SingleRaceRequest):
     }
     save_prediction_log(race_id, track_code, predictions, metadata)
 
-    # 層別買い目サマリー作成（単一レース用）
+    # ========== 回収率ベース買い目サマリー（単一レース用） ==========
     betting_picks = {
-        "honmei": [],  # 本命層（確率60%以上）
-        "ana": [],     # 穴馬層（確率40-60%でオッズ3倍以上）
-        "total_bet": 0
+        "roi_buy": [],
+        "watch": [],
+        "total_bet": 0,
+        "expected_return": 0,
+        "min_odds_required": min_odds,
+        "strategy": f"複勝オッズ{min_odds}倍以上のみ購入"
     }
     for pred in predictions:
-        if pred["bet_layer"]:
+        if pred["bet_layer"] in ["roi_buy", "watch"]:
             pick = {
                 "number": pred["number"],
                 "name": pred["name"],
                 "prob": pred["prob"],
                 "place_odds": pred["place_odds"],
-                "recommended_bet": pred["recommended_bet"]
+                "expected_value": pred["expected_value"],
+                "recommended_bet": pred["recommended_bet"],
+                "reason": "オッズ条件クリア" if pred["bet_layer"] == "roi_buy" else f"オッズ{min_odds}倍未満"
             }
             betting_picks[pred["bet_layer"]].append(pick)
-            betting_picks["total_bet"] += pred["recommended_bet"]
+            if pred["bet_layer"] == "roi_buy":
+                betting_picks["total_bet"] += pred["recommended_bet"]
+                betting_picks["expected_return"] += pred["recommended_bet"] * pred["expected_value"]
 
     return {
         "id": race_num,
@@ -1437,23 +1495,60 @@ def get_precomputed_predictions(date: str, track_code: str):
     with open(predictions_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
 
-    # 層別買い目を動的に追加（キャッシュファイルに含まれていない場合）
+    # 回収率ベース買い目を動的に追加（キャッシュファイルに含まれていない場合）
+    min_odds = MIN_PLACE_ODDS_FOR_ROI.get(track_code, 2.0)
+
     for race in data.get("races", []):
-        for pred in race.get("predictions", []):
-            prob = pred.get("prob", 0)
+        for i, pred in enumerate(race.get("predictions", [])):
             # bet_layerがまだない場合のみ追加
             if "bet_layer" not in pred:
                 bet_layer = None
                 recommended_bet = 0
-                if prob >= 0.60:  # 本命層: 60%以上
-                    bet_layer = "honmei"
-                    recommended_bet = 500
-                elif prob >= 0.40:  # 穴馬層の候補（オッズは後で判定）
-                    # キャッシュにはオッズがないので、40%以上は穴馬層候補とする
-                    bet_layer = "ana"
-                    recommended_bet = 300
+
+                if i == 0:  # 予測1位のみ対象
+                    # キャッシュにはリアルタイムオッズがないので、オッズ取得後に再判定が必要
+                    place_odds = pred.get("place_odds", 0) or 0
+                    expected_value = pred.get("expected_value", 0) or 0
+
+                    if place_odds >= min_odds:
+                        bet_layer = "roi_buy"
+                        recommended_bet = calculate_bet_amount(expected_value)
+                    else:
+                        # オッズ未取得 or オッズ不足 → 様子見
+                        bet_layer = "watch"
+                        recommended_bet = 0
+
                 pred["bet_layer"] = bet_layer
                 pred["recommended_bet"] = recommended_bet
+
+    # betting_picksサマリーを追加
+    data["betting_picks"] = {
+        "roi_buy": [],
+        "watch": [],
+        "total_bet": 0,
+        "expected_return": 0,
+        "min_odds_required": min_odds,
+        "strategy": f"複勝オッズ{min_odds}倍以上のみ購入"
+    }
+    for race in data.get("races", []):
+        for pred in race.get("predictions", []):
+            if pred.get("bet_layer") in ["roi_buy", "watch"]:
+                pick = {
+                    "race_id": race.get("id"),
+                    "race_name": race.get("name"),
+                    "race_time": race.get("time"),
+                    "number": pred.get("number"),
+                    "name": pred.get("name"),
+                    "prob": pred.get("prob"),
+                    "place_odds": pred.get("place_odds"),
+                    "expected_value": pred.get("expected_value", 0),
+                    "recommended_bet": pred.get("recommended_bet", 0),
+                    "reason": "オッズ条件クリア" if pred["bet_layer"] == "roi_buy" else f"オッズ{min_odds}倍未満 or 未取得"
+                }
+                data["betting_picks"][pred["bet_layer"]].append(pick)
+                if pred["bet_layer"] == "roi_buy":
+                    data["betting_picks"]["total_bet"] += pred.get("recommended_bet", 0)
+                    data["betting_picks"]["expected_return"] += pred.get("recommended_bet", 0) * pred.get("expected_value", 0)
 
     return data
 
