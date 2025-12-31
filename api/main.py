@@ -491,18 +491,49 @@ class NARScraper:
         url = f"{self.DB_URL}/jockey/{jockey_id}/"
         try:
             soup = self._fetch(url)
-            text = soup.get_text()
             stats = {'jockey_win_rate': 0, 'jockey_place_rate': 0, 'jockey_show_rate': 0}
 
-            m = re.search(r'勝率[：:\s]*(\d+\.?\d*)', text)
-            if m:
-                stats['jockey_win_rate'] = float(m.group(1)) / 100
-            m = re.search(r'連対率[：:\s]*(\d+\.?\d*)', text)
-            if m:
-                stats['jockey_place_rate'] = float(m.group(1)) / 100
-            m = re.search(r'複勝率[：:\s]*(\d+\.?\d*)', text)
-            if m:
-                stats['jockey_show_rate'] = float(m.group(1)) / 100
+            # テーブルから成績を取得（累計行を探す）
+            tables = soup.find_all('table')
+            for table in tables:
+                rows = table.find_all('tr')
+                # ヘッダー行で「勝率」列を探す
+                header_row = rows[0] if rows else None
+                if header_row:
+                    headers = [th.get_text(strip=True) for th in header_row.find_all(['th', 'td'])]
+                    # 勝率、連対率、複勝率の列インデックスを探す
+                    # 注意: 「複勝率」には「勝率」が含まれるので、先に複勝率をチェック
+                    win_idx = place_idx = show_idx = -1
+                    for i, h in enumerate(headers):
+                        if '複勝率' in h:
+                            show_idx = i
+                        elif '連対率' in h:
+                            place_idx = i
+                        elif '勝率' in h:  # 複勝率でない勝率
+                            win_idx = i
+
+                    if win_idx >= 0:
+                        # 累計行（2行目）からデータを取得
+                        for row in rows[1:3]:
+                            cells = row.find_all(['th', 'td'])
+                            cell_texts = [c.get_text(strip=True) for c in cells]
+                            if len(cell_texts) > max(win_idx, place_idx, show_idx):
+                                # 全角・半角両方のパーセント記号に対応
+                                def parse_rate(text):
+                                    m = re.search(r'(\d+\.?\d*)[％%]', text)
+                                    return float(m.group(1)) / 100 if m else 0
+
+                                if win_idx >= 0 and win_idx < len(cell_texts):
+                                    stats['jockey_win_rate'] = parse_rate(cell_texts[win_idx])
+                                if place_idx >= 0 and place_idx < len(cell_texts):
+                                    stats['jockey_place_rate'] = parse_rate(cell_texts[place_idx])
+                                if show_idx >= 0 and show_idx < len(cell_texts):
+                                    stats['jockey_show_rate'] = parse_rate(cell_texts[show_idx])
+
+                                if stats['jockey_win_rate'] > 0:
+                                    break
+                        if stats['jockey_win_rate'] > 0:
+                            break
 
             self.jockey_cache[jockey_id] = stats
             return stats
