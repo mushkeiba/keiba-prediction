@@ -746,23 +746,34 @@ class NARScraper:
 # ========== 前処理 ==========
 class Processor:
     def __init__(self):
+        # 新モデル（optimize_v2.py）対応: 52特徴量
         self.features = [
+            # 基本特徴量
             'horse_runs', 'horse_win_rate', 'horse_place_rate', 'horse_show_rate',
             'horse_avg_rank', 'horse_recent_win_rate', 'horse_recent_show_rate',
             'horse_recent_avg_rank', 'last_rank',
             'jockey_win_rate', 'jockey_place_rate', 'jockey_show_rate',
             'horse_number', 'bracket', 'age', 'weight_carried', 'distance',
-            'sex_encoded', 'track_encoded', 'field_size', 'weight_diff',
+            'sex_encoded', 'field_size', 'weight_diff',
             # 環境特徴量
             'track_condition_encoded', 'weather_encoded',
-            'trainer_encoded', 'horse_weight', 'horse_weight_change',
+            'horse_weight', 'horse_weight_change',
             # 計算特徴量
             'horse_number_ratio', 'last_rank_diff', 'win_rate_rank',
             # 相対特徴量（レース内での相対的な強さ）
             'horse_win_rate_vs_field', 'jockey_win_rate_vs_field',
             'horse_avg_rank_vs_field',
             # 休養・調子
-            'days_since_last_race', 'rank_trend'
+            'days_since_last_race', 'rank_trend',
+            # 時系列特徴量
+            'win_streak', 'show_streak', 'recent_3_avg_rank', 'recent_10_avg_rank', 'rank_improvement',
+            # Target Encoding（推論時はグローバル平均を使用）
+            'jockey_id_te', 'trainer_id_te', 'horse_id_te',
+            # 追加特徴量（AUC 0.8目標の最適化で追加）
+            'horse_jockey_synergy', 'form_score', 'class_indicator',
+            'horse_win_rate_std', 'field_strength', 'inner_outer',
+            'avg_rank_percentile', 'jockey_rank_in_race', 'odds_implied_prob',
+            'distance_fitness', 'weight_per_meter', 'experience_score'
         ]
 
     def process(self, df):
@@ -949,6 +960,93 @@ class Processor:
             df['rank_improvement'] = df['rank_improvement'].fillna(0)
         else:
             df['rank_improvement'] = 0
+
+        # === Target Encoding（推論時はグローバル平均を使用）===
+        # 訓練時に計算されたTarget Encodingは推論時には使えないため、
+        # グローバル平均（約0.08〜0.1程度）をデフォルト値として使用
+        global_te_default = 0.08  # 平均勝率に近い値
+        df['jockey_id_te'] = global_te_default
+        df['trainer_id_te'] = global_te_default
+        df['horse_id_te'] = global_te_default
+
+        # === 追加特徴量（AUC 0.8目標の最適化で追加）===
+        # 馬×騎手シナジー
+        if 'horse_win_rate' in df.columns and 'jockey_win_rate' in df.columns:
+            df['horse_jockey_synergy'] = df['horse_win_rate'] * df['jockey_win_rate']
+        else:
+            df['horse_jockey_synergy'] = 0
+
+        # フォームスコア（調子指標）
+        if all(c in df.columns for c in ['last_rank', 'field_size', 'horse_recent_avg_rank', 'horse_win_rate']):
+            df['form_score'] = (
+                0.5 * (1 - df['last_rank'] / df['field_size'].clip(lower=1)) +
+                0.3 * (1 - df['horse_recent_avg_rank'] / df['field_size'].clip(lower=1)) +
+                0.2 * df['horse_win_rate']
+            ).fillna(0)
+        else:
+            df['form_score'] = 0
+
+        # クラス指標（出走頭数/平均着順）
+        if 'field_size' in df.columns and 'horse_avg_rank' in df.columns:
+            df['class_indicator'] = df['field_size'] / (df['horse_avg_rank'] + 1)
+            df['class_indicator'] = df['class_indicator'].fillna(1)
+        else:
+            df['class_indicator'] = 1
+
+        # 勝率の標準偏差（推論時は計算不可、0をデフォルト）
+        df['horse_win_rate_std'] = 0
+
+        # フィールド強度（レース内の平均勝率）
+        if 'horse_win_rate' in df.columns and 'race_id' in df.columns:
+            df['field_strength'] = df.groupby('race_id')['horse_win_rate'].transform('mean')
+            df['field_strength'] = df['field_strength'].fillna(0.1)
+        else:
+            df['field_strength'] = 0.1
+
+        # 内外（馬番による枠位置）: 0=内, 1=中, 2=外
+        if 'horse_number' in df.columns:
+            df['inner_outer'] = df['horse_number'].apply(
+                lambda x: 0 if pd.notna(x) and x <= 4 else (2 if pd.notna(x) and x >= 10 else 1)
+            )
+        else:
+            df['inner_outer'] = 1
+
+        # 平均着順パーセンタイル（レース内での相対順位）
+        if 'horse_avg_rank' in df.columns and 'race_id' in df.columns:
+            df['avg_rank_percentile'] = df.groupby('race_id')['horse_avg_rank'].rank(pct=True)
+            df['avg_rank_percentile'] = df['avg_rank_percentile'].fillna(0.5)
+        else:
+            df['avg_rank_percentile'] = 0.5
+
+        # 騎手のレース内ランク
+        if 'jockey_win_rate' in df.columns and 'race_id' in df.columns:
+            df['jockey_rank_in_race'] = df.groupby('race_id')['jockey_win_rate'].rank(ascending=False)
+            df['jockey_rank_in_race'] = df['jockey_rank_in_race'].fillna(6)
+        else:
+            df['jockey_rank_in_race'] = 6
+
+        # オッズからの暗黙的勝率（オッズがない場合はデフォルト）
+        if 'odds' in df.columns:
+            df['odds_implied_prob'] = 1 / (df['odds'].clip(lower=1) + 1)
+        else:
+            df['odds_implied_prob'] = 0.1  # デフォルト（約10倍相当）
+
+        # 距離適性（推論時はデフォルト）
+        df['distance_fitness'] = 1.0
+
+        # 斤量/距離（負担重量の効率）
+        if 'weight_carried' in df.columns and 'distance' in df.columns:
+            df['weight_per_meter'] = df['weight_carried'] / (df['distance'] / 1000).clip(lower=0.1)
+            df['weight_per_meter'] = df['weight_per_meter'].fillna(50)
+        else:
+            df['weight_per_meter'] = 50
+
+        # 経験スコア（出走数×複勝率）
+        if 'horse_runs' in df.columns and 'horse_show_rate' in df.columns:
+            df['experience_score'] = np.log1p(df['horse_runs']) * df['horse_show_rate']
+            df['experience_score'] = df['experience_score'].fillna(0)
+        else:
+            df['experience_score'] = 0
 
         # === 血統特徴量 ===
         for col in ['father_win_rate', 'father_show_rate', 'bms_win_rate', 'bms_show_rate']:

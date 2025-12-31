@@ -2,6 +2,63 @@
 
 ## 2025-12-31
 
+### デプロイ: 新モデル（52特徴量）対応のAPI更新
+
+**目的**: optimize_v2.pyで作成した最適化モデルを本番環境で使用可能にする
+
+**問題**: 新モデルは52特徴量を必要とするが、APIのProcessorは34特徴量しか生成していなかった
+
+**変更内容**:
+- `api/main.py`: Processorクラスを52特徴量対応に更新
+
+**追加した特徴量計算**:
+| カテゴリ | 特徴量 |
+|----------|--------|
+| Target Encoding | jockey_id_te, trainer_id_te, horse_id_te（推論時はグローバル平均0.08） |
+| シナジー | horse_jockey_synergy（馬勝率×騎手勝率） |
+| 調子 | form_score（前走着順+近走平均+勝率の加重スコア） |
+| クラス | class_indicator（出走頭数/平均着順） |
+| 強度 | field_strength（レース内平均勝率） |
+| 位置 | inner_outer（内枠=0/中枠=1/外枠=2） |
+| ランク | avg_rank_percentile, jockey_rank_in_race |
+| その他 | odds_implied_prob, distance_fitness, weight_per_meter, experience_score |
+
+**本番反映**: Gitにpushすると自動デプロイ（Render）
+
+---
+
+### 改善: AUC大幅向上（Target Encoding + Optuna最適化）
+
+**目的**: AUC 0.8を目指した大規模最適化
+
+**実施した施策**:
+1. **Target Encoding** - 騎手ID、調教師ID、馬IDを目的変数でエンコード（リーケージ対策付き）
+2. **Optuna 100試行** - ハイパーパラメータ自動最適化
+3. **追加特徴量** - 馬×騎手シナジー、調子スコア、距離適性など
+4. **Weighted Ensemble** - LightGBM + XGBoostの重み付きアンサンブル
+
+**結果**:
+| 競馬場 | 旧AUC | 新AUC | 改善 |
+|--------|-------|-------|------|
+| 大井 | 0.7746 | **0.7868** | **+1.22%** |
+| 川崎 | 0.7248 | **0.7387** | **+1.39%** |
+
+**新規ファイル**:
+- `optimize_v2.py` - Target Encoding付き最適化スクリプト
+- `optimize_to_08.py` - 基本最適化スクリプト
+
+---
+
+### 改善: 川崎・大井モデルの特徴量統一
+
+**変更内容**:
+- `retrain_kawasaki.py` を新規作成（CSVのみで再学習）
+- 川崎・大井モデルを46個の統一特徴量で再学習
+
+**新規ファイル**: `retrain_kawasaki.py`（汎用再学習スクリプト）
+
+---
+
 ### 機能追加: Optunaによるフィルター自動最適化スクリプト
 
 **目的**: 過去データで自動的にテスト→答え合わせを繰り返し、最適なフィルター条件を探索
