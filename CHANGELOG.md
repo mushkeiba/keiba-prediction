@@ -2,6 +2,18 @@
 
 ## 2026-01-01
 
+### 修正: TargetEncoderSafeクラス追加（モデル読み込みエラー対応）
+
+**問題**: APIで予測ボタン押下時に「AttributeError: Can't get attribute 'TargetEncoderSafe'」
+
+**原因**: v6モデルがpickle保存時に含んだカスタムクラス`TargetEncoderSafe`がAPI側に存在しなかった
+
+**変更内容**:
+- `api/main.py`: `TargetEncoderSafe`クラスを追加
+- `load_model()`で`__main__`モジュールにクラスを登録してpickle読み込みに対応
+
+---
+
 ### 修正: フロントエンド互換性修正
 
 **問題**: keiba-web-chi.vercel.appで「Application error: a client-side exception has occurred」エラー
