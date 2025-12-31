@@ -1336,7 +1336,7 @@ def get_odds_only(request: OddsRequest):
 
 @app.get("/api/predictions/{date}/{track_code}")
 def get_precomputed_predictions(date: str, track_code: str):
-    """事前計算済みの予測JSONを取得"""
+    """事前計算済みの予測JSONを取得（層別買い目を動的に追加）"""
     if track_code not in TRACKS:
         raise HTTPException(status_code=400, detail="無効な競馬場コード")
 
@@ -1348,6 +1348,24 @@ def get_precomputed_predictions(date: str, track_code: str):
     import json
     with open(predictions_file, 'r', encoding='utf-8') as f:
         data = json.load(f)
+
+    # 層別買い目を動的に追加（キャッシュファイルに含まれていない場合）
+    for race in data.get("races", []):
+        for pred in race.get("predictions", []):
+            prob = pred.get("prob", 0)
+            # bet_layerがまだない場合のみ追加
+            if "bet_layer" not in pred:
+                bet_layer = None
+                recommended_bet = 0
+                if prob >= 0.60:  # 本命層: 60%以上
+                    bet_layer = "honmei"
+                    recommended_bet = 500
+                elif prob >= 0.40:  # 穴馬層の候補（オッズは後で判定）
+                    # キャッシュにはオッズがないので、40%以上は穴馬層候補とする
+                    bet_layer = "ana"
+                    recommended_bet = 300
+                pred["bet_layer"] = bet_layer
+                pred["recommended_bet"] = recommended_bet
 
     return data
 
