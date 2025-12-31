@@ -614,9 +614,13 @@ class Processor:
             # 環境特徴量
             'track_condition_encoded', 'weather_encoded',
             'trainer_encoded', 'horse_weight', 'horse_weight_change',
-            # 計算特徴量（効果のあるもののみ）
-            'horse_number_ratio', 'last_rank_diff', 'win_rate_rank'
-            # 削除: distance_category, horse_position - 重要度が低すぎる
+            # 計算特徴量
+            'horse_number_ratio', 'last_rank_diff', 'win_rate_rank',
+            # 相対特徴量（レース内での相対的な強さ）
+            'horse_win_rate_vs_field', 'jockey_win_rate_vs_field',
+            'horse_avg_rank_vs_field',
+            # 休養・調子
+            'days_since_last_race', 'rank_trend'
         ]
 
     def process(self, df):
@@ -713,15 +717,37 @@ class Processor:
         else:
             df['win_rate_rank'] = 6
 
-        # 馬番位置（内/中/外）
-        if 'horse_number' in df.columns and 'field_size' in df.columns:
-            df['horse_position'] = df.apply(
-                lambda row: 0 if pd.notna(row.get('horse_number')) and pd.notna(row.get('field_size')) and row['horse_number'] / row['field_size'] <= 0.33
-                else (2 if pd.notna(row.get('horse_number')) and pd.notna(row.get('field_size')) and row['horse_number'] / row['field_size'] > 0.66 else 1),
-                axis=1
-            )
+        # === 相対特徴量（レース内での相対的な強さ）===
+        if 'horse_win_rate' in df.columns and 'race_id' in df.columns:
+            df['field_avg_win_rate'] = df.groupby('race_id')['horse_win_rate'].transform('mean')
+            df['horse_win_rate_vs_field'] = df['horse_win_rate'] - df['field_avg_win_rate']
+            df['horse_win_rate_vs_field'] = df['horse_win_rate_vs_field'].fillna(0)
         else:
-            df['horse_position'] = 1
+            df['horse_win_rate_vs_field'] = 0
+
+        if 'jockey_win_rate' in df.columns and 'race_id' in df.columns:
+            df['field_avg_jockey_win_rate'] = df.groupby('race_id')['jockey_win_rate'].transform('mean')
+            df['jockey_win_rate_vs_field'] = df['jockey_win_rate'] - df['field_avg_jockey_win_rate']
+            df['jockey_win_rate_vs_field'] = df['jockey_win_rate_vs_field'].fillna(0)
+        else:
+            df['jockey_win_rate_vs_field'] = 0
+
+        if 'horse_avg_rank' in df.columns and 'race_id' in df.columns:
+            df['field_avg_rank'] = df.groupby('race_id')['horse_avg_rank'].transform('mean')
+            df['horse_avg_rank_vs_field'] = df['field_avg_rank'] - df['horse_avg_rank']
+            df['horse_avg_rank_vs_field'] = df['horse_avg_rank_vs_field'].fillna(0)
+        else:
+            df['horse_avg_rank_vs_field'] = 0
+
+        # === 休養日数 ===
+        df['days_since_last_race'] = 30  # デフォルト30日（リアルタイム予測では計算困難）
+
+        # === 着順トレンド ===
+        if 'last_rank' in df.columns and 'horse_avg_rank' in df.columns:
+            df['rank_trend'] = df['horse_avg_rank'] - df['last_rank']
+            df['rank_trend'] = df['rank_trend'].fillna(0)
+        else:
+            df['rank_trend'] = 0
 
         for f in self.features:
             if f not in df.columns:
