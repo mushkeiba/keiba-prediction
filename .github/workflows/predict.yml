@@ -1,7 +1,11 @@
 name: Generate Daily Predictions
 
 on:
-  # 手動実行のみ（競馬場を指定して実行）
+  # 毎朝6時(JST)に自動実行 → 開催中の全競馬場を自動検出
+  schedule:
+    - cron: '0 21 * * *'  # UTC 21:00 = JST 6:00
+
+  # 手動実行（競馬場を指定して実行）
   workflow_dispatch:
     inputs:
       date:
@@ -9,10 +13,12 @@ on:
         required: false
         type: string
       track:
-        description: '競馬場'
-        required: true
+        description: '競馬場（空欄で全競馬場を自動検出）'
+        required: false
         type: choice
+        default: ''
         options:
+          - ''
           - 大井
           - 川崎
           - 船橋
@@ -51,23 +57,31 @@ jobs:
       - name: Determine track code
         id: track
         run: |
-          case "${{ github.event.inputs.track }}" in
-            "大井") CODE="44" ;;
-            "川崎") CODE="45" ;;
-            "船橋") CODE="43" ;;
-            "浦和") CODE="42" ;;
-            "門別") CODE="30" ;;
-            "盛岡") CODE="35" ;;
-            "水沢") CODE="36" ;;
-            "金沢") CODE="46" ;;
-            "笠松") CODE="47" ;;
-            "名古屋") CODE="48" ;;
-            "園田") CODE="50" ;;
-            "姫路") CODE="51" ;;
-            "高知") CODE="54" ;;
-            "佐賀") CODE="55" ;;
-          esac
-          echo "code=$CODE" >> $GITHUB_OUTPUT
+          TRACK="${{ github.event.inputs.track }}"
+          if [ -z "$TRACK" ]; then
+            # 空の場合は全競馬場を自動検出（コード指定なし）
+            echo "code=" >> $GITHUB_OUTPUT
+            echo "name=全競馬場（自動検出）" >> $GITHUB_OUTPUT
+          else
+            case "$TRACK" in
+              "大井") CODE="44" ;;
+              "川崎") CODE="45" ;;
+              "船橋") CODE="43" ;;
+              "浦和") CODE="42" ;;
+              "門別") CODE="30" ;;
+              "盛岡") CODE="35" ;;
+              "水沢") CODE="36" ;;
+              "金沢") CODE="46" ;;
+              "笠松") CODE="47" ;;
+              "名古屋") CODE="48" ;;
+              "園田") CODE="50" ;;
+              "姫路") CODE="51" ;;
+              "高知") CODE="54" ;;
+              "佐賀") CODE="55" ;;
+            esac
+            echo "code=$CODE" >> $GITHUB_OUTPUT
+            echo "name=$TRACK" >> $GITHUB_OUTPUT
+          fi
 
       - name: Generate predictions
         run: |
@@ -76,14 +90,21 @@ jobs:
           else
             DATE=$(TZ=Asia/Tokyo date +%Y-%m-%d)
           fi
-          echo "🔮 予測生成: $DATE - ${{ github.event.inputs.track }}"
-          python generate_predictions.py "$DATE" "${{ steps.track.outputs.code }}"
+
+          TRACK_CODE="${{ steps.track.outputs.code }}"
+          if [ -z "$TRACK_CODE" ]; then
+            echo "🔮 予測生成: $DATE - 全競馬場（自動検出）"
+            python generate_predictions.py "$DATE"
+          else
+            echo "🔮 予測生成: $DATE - ${{ steps.track.outputs.name }}"
+            python generate_predictions.py "$DATE" "$TRACK_CODE"
+          fi
 
       - name: Commit and push
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add predictions/
-          git diff --staged --quiet || git commit -m "🔮 予測: ${{ github.event.inputs.track }} $(TZ=Asia/Tokyo date +%Y-%m-%d)"
+          git diff --staged --quiet || git commit -m "🔮 予測: ${{ steps.track.outputs.name }} $(TZ=Asia/Tokyo date +%Y-%m-%d)"
           git pull --rebase origin main || true
           git push
