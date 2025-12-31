@@ -2,6 +2,21 @@
 
 ## 2026-01-01
 
+### 機能追加: v6モデル用特徴量をAPIに追加
+
+**問題**: `KeyError: "['prev_last_3f', 'avg_last_3f_3races', ...] not in index"`
+
+**原因**: v6モデルは上がり3F関連の特徴量で学習されているが、APIのProcessorがこれらを生成していなかった
+
+**変更内容**:
+- `api/main.py`: Processorに以下の特徴量を追加
+  - `prev_last_3f`, `avg_last_3f_3races`, `avg_last_3f_5races`
+  - `prev_last_3f_rank`, `prev_last_3f_vs_field`
+  - `past_rank_std`, `is_first_race`
+- リアルタイム予測では過去データ取得が困難なためデフォルト値を使用
+
+---
+
 ### 修正: TargetEncoderSafeクラス追加（モデル読み込みエラー対応）
 
 **問題**: APIで予測ボタン押下時に「AttributeError: Can't get attribute 'TargetEncoderSafe'」
