@@ -1311,7 +1311,8 @@ def predict(request: PredictRequest):
     expected_roi = config["expected_roi"]
 
     betting_picks = {
-        "v6_buy": [],      # v6推奨買い（prob_diff条件クリア）
+        "roi_buy": [],     # 推奨買い（v6: prob_diff条件クリア）※フロントエンド互換
+        "v6_buy": [],      # 同じ内容（新キー名）
         "watch": [],       # 様子見（prob_diff不足）
         "total_bet": 0,
         "expected_return": 0,
@@ -1345,6 +1346,7 @@ def predict(request: PredictRequest):
                 "confidence": "高" if prob_diff >= 0.25 else "中",
             }
             betting_picks["v6_buy"].append(pick)
+            betting_picks["roi_buy"].append(pick)  # フロントエンド互換
             betting_picks["total_bet"] += 100
             # 期待リターン = 賭け金 × 期待ROI
             betting_picks["expected_return"] += 100 * expected_roi
