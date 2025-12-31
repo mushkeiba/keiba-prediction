@@ -819,7 +819,11 @@ class Processor:
             'horse_jockey_synergy', 'form_score', 'class_indicator',
             'horse_win_rate_std', 'field_strength', 'inner_outer',
             'avg_rank_percentile', 'jockey_rank_in_race', 'odds_implied_prob',
-            'distance_fitness', 'weight_per_meter', 'experience_score'
+            'distance_fitness', 'weight_per_meter', 'experience_score',
+            # v6追加特徴量（上がり3F関連）
+            'prev_last_3f', 'avg_last_3f_3races', 'avg_last_3f_5races',
+            'prev_last_3f_rank', 'prev_last_3f_vs_field',
+            'past_rank_std', 'is_first_race'
         ]
 
     def process(self, df):
@@ -1098,6 +1102,36 @@ class Processor:
         for col in ['father_win_rate', 'father_show_rate', 'bms_win_rate', 'bms_show_rate']:
             if col not in df.columns:
                 df[col] = 0
+
+        # === v6追加特徴量（上がり3F関連）===
+        # 前走の上がり3F（リアルタイム予測では過去データがないのでデフォルト値）
+        if 'prev_last_3f' not in df.columns:
+            df['prev_last_3f'] = 36.0  # 平均的な上がり3Fタイム（36秒）
+
+        # 過去3走・5走の上がり3F平均
+        if 'avg_last_3f_3races' not in df.columns:
+            df['avg_last_3f_3races'] = 36.0
+        if 'avg_last_3f_5races' not in df.columns:
+            df['avg_last_3f_5races'] = 36.0
+
+        # 前走の上がり3F順位（フィールド内での相対順位）
+        if 'prev_last_3f_rank' not in df.columns:
+            df['prev_last_3f_rank'] = 5  # 中間順位
+
+        # 上がり3Fのフィールド平均との差
+        if 'prev_last_3f_vs_field' not in df.columns:
+            df['prev_last_3f_vs_field'] = 0  # 平均との差なし
+
+        # 過去着順の標準偏差（安定性指標）
+        if 'past_rank_std' not in df.columns:
+            df['past_rank_std'] = 3.0  # 中程度のばらつき
+
+        # 初出走フラグ（出走回数が0または1なら初出走）
+        if 'is_first_race' not in df.columns:
+            if 'horse_runs' in df.columns:
+                df['is_first_race'] = (df['horse_runs'] <= 1).astype(int)
+            else:
+                df['is_first_race'] = 0
 
         for f in self.features:
             if f not in df.columns:
