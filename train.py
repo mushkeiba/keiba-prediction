@@ -373,9 +373,9 @@ class Processor:
             # 環境特徴量
             'track_condition_encoded', 'weather_encoded',
             'trainer_encoded', 'horse_weight', 'horse_weight_change',
-            # 計算特徴量
-            'horse_number_ratio', 'distance_category', 'last_rank_diff',
-            'win_rate_rank', 'horse_position'
+            # 計算特徴量（効果のあるもののみ）
+            'horse_number_ratio', 'last_rank_diff', 'win_rate_rank'
+            # 削除: distance_category(15.3), horse_position(5.1) - 重要度が低すぎる
         ]
 
     def process(self, df):
@@ -497,8 +497,22 @@ def train_model(df, features):
     X, y = df[features].fillna(-1), df['target']
     X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
+    # Optuna最適化パラメータ (2025-12-31)
+    params = {
+        'objective': 'binary',
+        'metric': 'auc',
+        'verbose': -1,
+        'num_leaves': 112,
+        'learning_rate': 0.067,
+        'min_child_samples': 65,
+        'reg_alpha': 6.8e-07,
+        'reg_lambda': 0.025,
+        'feature_fraction': 0.78,
+        'bagging_fraction': 0.78,
+        'bagging_freq': 3
+    }
     model = lgb.train(
-        {'objective':'binary','metric':'auc','num_leaves':31,'learning_rate':0.05,'verbose':-1},
+        params,
         lgb.Dataset(X_tr, y_tr), 500, [lgb.Dataset(X_te, y_te)],
         callbacks=[lgb.early_stopping(50), lgb.log_evaluation(0)]
     )

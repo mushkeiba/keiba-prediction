@@ -614,9 +614,9 @@ class Processor:
             # 環境特徴量
             'track_condition_encoded', 'weather_encoded',
             'trainer_encoded', 'horse_weight', 'horse_weight_change',
-            # 計算特徴量
-            'horse_number_ratio', 'distance_category', 'last_rank_diff',
-            'win_rate_rank', 'horse_position'
+            # 計算特徴量（効果のあるもののみ）
+            'horse_number_ratio', 'last_rank_diff', 'win_rate_rank'
+            # 削除: distance_category, horse_position - 重要度が低すぎる
         ]
 
     def process(self, df):
