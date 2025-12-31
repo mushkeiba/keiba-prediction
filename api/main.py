@@ -733,13 +733,24 @@ class RaceResult(BaseModel):
 
 @app.post("/api/predict")
 def predict(request: PredictRequest):
-    """予測を実行"""
+    """予測を実行（事前生成JSONがあれば優先使用）"""
     track_code = request.track_code
     date_str = request.date.replace("-", "")
 
     if track_code not in TRACKS:
         raise HTTPException(status_code=400, detail="無効な競馬場コード")
 
+    # === 事前生成JSONをチェック ===
+    predictions_file = BASE_DIR / "predictions" / request.date / f"{track_code}.json"
+    if predictions_file.exists():
+        # JSONが存在すれば読み込んで返す（一貫性のある予測）
+        with open(predictions_file, 'r', encoding='utf-8') as f:
+            cached_data = json.load(f)
+        # 事前生成データを使用していることを示すフラグを追加
+        cached_data["from_cache"] = True
+        return cached_data
+
+    # === JSONがない場合はスクレイピング ===
     model, model_features = load_model(track_code)
     if model is None:
         raise HTTPException(
