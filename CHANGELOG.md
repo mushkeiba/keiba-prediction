@@ -2,6 +2,18 @@
 
 ## 2026-01-01
 
+### 修正: フロントエンド互換性修正
+
+**問題**: keiba-web-chi.vercel.appで「Application error: a client-side exception has occurred」エラー
+
+**原因**: APIのbetting_picks応答が`v6_buy`キーのみで、フロントエンドが期待する`roi_buy`キーがなかった
+
+**変更内容**:
+- `api/main.py`: betting_picksに`roi_buy`と`v6_buy`両方のキーを含めるよう修正
+- フロントエンドとの後方互換性を維持
+
+---
+
 ### 機能追加: v6モデル - 選択的ベッティング戦略で回収率100%超達成
 
 **背景**: v5でリーク排除後のROIが95.6%（大井）/85.0%（川崎）と赤字だった
