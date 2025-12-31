@@ -45,7 +45,11 @@ class JockeyScraper:
         self.delay = delay
         self.session = requests.Session()
         self.session.headers.update({'User-Agent': 'Mozilla/5.0'})
+        self.session.verify = False  # SSL証明書検証をスキップ
         self.cache = {}
+        # SSL警告を抑制
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     def get_stats(self, jockey_id: str) -> dict:
         if jockey_id in self.cache:
@@ -161,11 +165,11 @@ def update_csv(track_name: str, track_info: dict):
     csv_path = track_info['data']
 
     if not Path(csv_path).exists():
-        print(f"❌ CSVが存在しません: {csv_path}")
+        print(f"[ERROR] CSVが存在しません: {csv_path}")
         return False
 
     print(f"\n{'='*50}")
-    print(f"🏇 {track_name}競馬場 - 特徴量更新")
+    print(f"[{track_name}競馬場] 特徴量更新")
     print(f"{'='*50}")
 
     # CSV読み込み
@@ -214,7 +218,7 @@ def update_csv(track_name: str, track_info: dict):
 
     # === 保存 ===
     df.to_csv(csv_path, index=False)
-    print(f"\n✅ 保存完了: {csv_path}")
+    print(f"\n[OK] 保存完了: {csv_path}")
 
     return True
 
@@ -236,12 +240,12 @@ def main():
     elif arg in TRACKS:
         update_csv(arg, TRACKS[arg])
     else:
-        print(f"❌ 不明な競馬場: {arg}")
+        print(f"[ERROR] 不明な競馬場: {arg}")
         print(f"利用可能: {', '.join(TRACKS.keys())}")
         sys.exit(1)
 
     print("\n" + "="*50)
-    print("✅ 全ての更新が完了しました")
+    print("[OK] 全ての更新が完了しました")
     print("次のステップ: python train.py <競馬場名> update")
     print("="*50)
 

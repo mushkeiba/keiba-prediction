@@ -607,9 +607,12 @@ class Processor:
             'jockey_win_rate', 'jockey_place_rate', 'jockey_show_rate',
             'horse_number', 'bracket', 'age', 'weight_carried', 'distance',
             'sex_encoded', 'track_encoded', 'field_size', 'weight_diff',
-            # 新特徴量
+            # 環境特徴量
             'track_condition_encoded', 'weather_encoded',
-            'trainer_encoded', 'horse_weight', 'horse_weight_change'
+            'trainer_encoded', 'horse_weight', 'horse_weight_change',
+            # 計算特徴量
+            'horse_number_ratio', 'distance_category', 'last_rank_diff',
+            'win_rate_rank', 'horse_position'
         ]
 
     def process(self, df):
@@ -677,6 +680,44 @@ class Processor:
             df['horse_weight_change'] = df['weight_change'].fillna(0)
         else:
             df['horse_weight_change'] = 0
+
+        # === 計算特徴量 ===
+        # 馬番比率（馬番/出走頭数）
+        if 'horse_number' in df.columns and 'field_size' in df.columns:
+            df['horse_number_ratio'] = df['horse_number'] / df['field_size']
+            df['horse_number_ratio'] = df['horse_number_ratio'].fillna(0.5)
+
+        # 距離カテゴリ（短距離/中距離/長距離）
+        if 'distance' in df.columns:
+            df['distance_category'] = df['distance'].apply(
+                lambda d: 0 if pd.notna(d) and d < 1400 else (2 if pd.notna(d) and d >= 1800 else 1)
+            )
+        else:
+            df['distance_category'] = 1
+
+        # 前走着順差（前走着順 - 平均着順）
+        if 'last_rank' in df.columns and 'horse_avg_rank' in df.columns:
+            df['last_rank_diff'] = df['last_rank'] - df['horse_avg_rank']
+            df['last_rank_diff'] = df['last_rank_diff'].fillna(0)
+        else:
+            df['last_rank_diff'] = 0
+
+        # レース内の勝率ランク
+        if 'horse_win_rate' in df.columns and 'race_id' in df.columns:
+            df['win_rate_rank'] = df.groupby('race_id')['horse_win_rate'].rank(ascending=False, method='min')
+            df['win_rate_rank'] = df['win_rate_rank'].fillna(df['field_size'] / 2)
+        else:
+            df['win_rate_rank'] = 6
+
+        # 馬番位置（内/中/外）
+        if 'horse_number' in df.columns and 'field_size' in df.columns:
+            df['horse_position'] = df.apply(
+                lambda row: 0 if pd.notna(row.get('horse_number')) and pd.notna(row.get('field_size')) and row['horse_number'] / row['field_size'] <= 0.33
+                else (2 if pd.notna(row.get('horse_number')) and pd.notna(row.get('field_size')) and row['horse_number'] / row['field_size'] > 0.66 else 1),
+                axis=1
+            )
+        else:
+            df['horse_position'] = 1
 
         for f in self.features:
             if f not in df.columns:

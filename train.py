@@ -370,9 +370,12 @@ class Processor:
             'jockey_win_rate', 'jockey_place_rate', 'jockey_show_rate',
             'horse_number', 'bracket', 'age', 'weight_carried', 'distance',
             'sex_encoded', 'track_encoded', 'field_size', 'weight_diff',
-            # 新特徴量
+            # 環境特徴量
             'track_condition_encoded', 'weather_encoded',
-            'trainer_encoded', 'horse_weight', 'horse_weight_change'
+            'trainer_encoded', 'horse_weight', 'horse_weight_change',
+            # 計算特徴量
+            'horse_number_ratio', 'distance_category', 'last_rank_diff',
+            'win_rate_rank', 'horse_position'
         ]
 
     def process(self, df):
@@ -440,6 +443,44 @@ class Processor:
             df['horse_weight_change'] = df['weight_change'].fillna(0)
         else:
             df['horse_weight_change'] = 0
+
+        # === 計算特徴量 ===
+        # 馬番比率（馬番/出走頭数）
+        if 'horse_number' in df.columns and 'field_size' in df.columns:
+            df['horse_number_ratio'] = df['horse_number'] / df['field_size']
+            df['horse_number_ratio'] = df['horse_number_ratio'].fillna(0.5)
+
+        # 距離カテゴリ（短距離/中距離/長距離）
+        if 'distance' in df.columns:
+            df['distance_category'] = df['distance'].apply(
+                lambda d: 0 if pd.notna(d) and d < 1400 else (2 if pd.notna(d) and d >= 1800 else 1)
+            )
+        else:
+            df['distance_category'] = 1
+
+        # 前走着順差（前走着順 - 平均着順）
+        if 'last_rank' in df.columns and 'horse_avg_rank' in df.columns:
+            df['last_rank_diff'] = df['last_rank'] - df['horse_avg_rank']
+            df['last_rank_diff'] = df['last_rank_diff'].fillna(0)
+        else:
+            df['last_rank_diff'] = 0
+
+        # レース内の勝率ランク
+        if 'horse_win_rate' in df.columns and 'race_id' in df.columns:
+            df['win_rate_rank'] = df.groupby('race_id')['horse_win_rate'].rank(ascending=False, method='min')
+            df['win_rate_rank'] = df['win_rate_rank'].fillna(df['field_size'] / 2)
+        else:
+            df['win_rate_rank'] = 6
+
+        # 馬番位置（内/中/外）
+        if 'horse_number' in df.columns and 'field_size' in df.columns:
+            df['horse_position'] = df.apply(
+                lambda row: 0 if pd.notna(row.get('horse_number')) and pd.notna(row.get('field_size')) and row['horse_number'] / row['field_size'] <= 0.33
+                else (2 if pd.notna(row.get('horse_number')) and pd.notna(row.get('field_size')) and row['horse_number'] / row['field_size'] > 0.66 else 1),
+                axis=1
+            )
+        else:
+            df['horse_position'] = 1
 
         if 'rank' in df.columns:
             df['target'] = (df['rank'] <= 3).astype(int)
@@ -559,7 +600,7 @@ def train_track(track_name, track_info, mode='init'):
         'update' - モデル再学習（差分のみ取得）
     """
     print(f"\n{'='*50}")
-    print(f"🏇 {track_name}競馬場 - {'初回モデル作成' if mode == 'init' else 'モデル再学習'}")
+    print(f"[{track_name}競馬場] {'初回モデル作成' if mode == 'init' else 'モデル再学習'}")
     print(f"{'='*50}")
 
     scraper = NARScraper(track_info['code'], delay=DELAY)
@@ -580,12 +621,12 @@ def train_track(track_name, track_info, mode='init'):
         # 再学習: 差分のみ取得
         latest_date = get_latest_date_from_csv(csv_path)
         if latest_date is None:
-            print(f"⚠️ CSVが存在しません。initモードで実行してください。")
+            print(f"[WARN] CSVが存在しません。initモードで実行してください。")
             return False
 
         start_date = latest_date + timedelta(days=1)
         if start_date > yesterday:
-            print(f"✅ データは最新です（最終: {latest_date.strftime('%Y-%m-%d')}）")
+            print(f"[OK] データは最新です（最終: {latest_date.strftime('%Y-%m-%d')}）")
             # データは最新だが、モデルは再学習する
             start_date = None
 
@@ -604,13 +645,13 @@ def train_track(track_name, track_info, mode='init'):
             # CSVに保存/追記
             if mode == 'init' or not Path(csv_path).exists():
                 df_new.to_csv(csv_path, index=False)
-                print(f"✅ CSV保存: {csv_path}")
+                print(f"[OK] CSV保存: {csv_path}")
             else:
                 df_new.to_csv(csv_path, mode='a', header=False, index=False)
-                print(f"✅ CSV追記: {csv_path}")
+                print(f"[OK] CSV追記: {csv_path}")
         else:
             if mode == 'init':
-                print(f"⚠️ {track_name}: データが見つかりません")
+                print(f"[WARN] {track_name}: データが見つかりません")
                 return False
             print(f"新規データなし")
 
@@ -655,7 +696,7 @@ def train_track(track_name, track_info, mode='init'):
 
     # 保存
     save_model(model, features, model_path, metadata)
-    print(f"✅ モデル保存: {model_path}")
+    print(f"[OK] モデル保存: {model_path}")
 
     return True
 
@@ -672,26 +713,26 @@ def main():
     mode = sys.argv[2].strip() if len(sys.argv) > 2 else 'update'
 
     if track_name not in TRACKS:
-        print(f"❌ 不明な競馬場: {track_name}")
+        print(f"[ERROR] 不明な競馬場: {track_name}")
         print(f"利用可能: {', '.join(TRACKS.keys())}")
         sys.exit(1)
 
     if mode not in ['init', 'update']:
-        print(f"❌ 不明なモード: {mode}")
+        print(f"[ERROR] 不明なモード: {mode}")
         print("利用可能: init / update")
         sys.exit(1)
 
-    print(f"🚀 学習開始: {track_name} ({mode}モード)")
+    print(f"[START] 学習開始: {track_name} ({mode}モード)")
 
     try:
         success = train_track(track_name, TRACKS[track_name], mode)
         if success:
-            print(f"\n✅ 完了: {track_name}")
+            print(f"\n[OK] 完了: {track_name}")
         else:
-            print(f"\n⚠️ 失敗: {track_name}")
+            print(f"\n[WARN] 失敗: {track_name}")
             sys.exit(1)
     except Exception as e:
-        print(f"❌ エラー: {e}")
+        print(f"[ERROR] エラー: {e}")
         sys.exit(1)
 
 
