@@ -11,6 +11,7 @@ import requests
 from bs4 import BeautifulSoup
 import re
 import time
+import random
 from datetime import datetime
 import os
 import json
@@ -93,28 +94,135 @@ MODEL_ALIASES = {
 }
 
 
+# ========== スクレイピング対策ヘルパー ==========
+# User-Agentリスト（実際のブラウザから取得）
+SCRAPER_USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
+]
+
+def create_scraper_session():
+    """スクレイピング対策済みセッションを作成"""
+    session = requests.Session()
+    ua = random.choice(SCRAPER_USER_AGENTS)
+    session.headers.update({
+        'User-Agent': ua,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+        'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Cache-Control': 'max-age=0',
+    })
+    return session
+
+def fetch_with_retry(url, encoding='EUC-JP', retries=3, delay=0.3):
+    """リトライ機能付きフェッチ（スタンドアロン関数用）"""
+    time.sleep(delay + random.uniform(0, 0.3))
+
+    for attempt in range(retries):
+        try:
+            session = create_scraper_session()
+            r = session.get(url, timeout=30)
+            r.raise_for_status()
+            r.encoding = encoding
+            return BeautifulSoup(r.text, 'lxml')
+        except requests.exceptions.RequestException:
+            if attempt < retries - 1:
+                time.sleep((2 ** attempt) + random.uniform(0, 1))
+            else:
+                return None
+    return None
+
+
 # ========== スクレイパー ==========
 class NARScraper:
     BASE_URL = "https://nar.netkeiba.com"
     DB_URL = "https://db.netkeiba.com"
 
+    # User-Agentローテーション用リスト（実際のブラウザから取得）
+    USER_AGENTS = [
+        # Chrome (Windows)
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+        # Chrome (Mac)
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        # Firefox (Windows)
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+        # Safari (Mac)
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15',
+        # Edge (Windows)
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0',
+    ]
+
     def __init__(self, track_code, delay=0.5):
         self.track_code = track_code
         self.delay = delay
         self.session = requests.Session()
-        self.session.headers.update({'User-Agent': 'Mozilla/5.0'})
         self.session.verify = False  # SSL証明書検証をスキップ
         self.horse_cache = {}
         self.jockey_cache = {}
+        self._request_count = 0
         # SSL警告を抑制
         import urllib3
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        # 初期ヘッダー設定
+        self._update_headers()
 
-    def _fetch(self, url, encoding='EUC-JP'):
-        time.sleep(self.delay)
-        r = self.session.get(url)
-        r.encoding = encoding
-        return BeautifulSoup(r.text, 'lxml')
+    def _update_headers(self, referer=None):
+        """リクエストごとにヘッダーを更新（ブラウザを模倣）"""
+        ua = random.choice(self.USER_AGENTS)
+        headers = {
+            'User-Agent': ua,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'same-origin' if referer else 'none',
+            'Sec-Fetch-User': '?1',
+            'Cache-Control': 'max-age=0',
+        }
+        if referer:
+            headers['Referer'] = referer
+        self.session.headers.update(headers)
+
+    def _random_delay(self):
+        """ランダムな遅延（人間らしいアクセス間隔を模倣）"""
+        # 基本遅延 ± 30%のランダム + 時々長めの休憩
+        jitter = self.delay * random.uniform(0.7, 1.3)
+        # 10リクエストごとに少し長めの休憩
+        if self._request_count > 0 and self._request_count % 10 == 0:
+            jitter += random.uniform(1.0, 2.0)
+        time.sleep(jitter)
+        self._request_count += 1
+
+    def _fetch(self, url, encoding='EUC-JP', retries=3):
+        """リトライ機能付きフェッチ"""
+        referer = f"{self.BASE_URL}/" if self.BASE_URL in url else None
+        self._update_headers(referer)
+        self._random_delay()
+
+        for attempt in range(retries):
+            try:
+                r = self.session.get(url, timeout=30)
+                r.raise_for_status()
+                r.encoding = encoding
+                return BeautifulSoup(r.text, 'lxml')
+            except requests.exceptions.RequestException as e:
+                if attempt < retries - 1:
+                    # 指数バックオフ
+                    wait_time = (2 ** attempt) + random.uniform(0, 1)
+                    time.sleep(wait_time)
+                    self._update_headers(referer)  # ヘッダー更新
+                else:
+                    raise e
+        return None
 
     def get_race_list_by_date(self, date: str) -> list:
         url = f"{self.BASE_URL}/top/race_list_sub.html?kaisai_date={date}"
@@ -919,6 +1027,16 @@ def predict(request: PredictRequest):
             # 妙味判定: 期待値 > 1.0 なら黒字期待
             is_value = expected_value > 1.0
 
+            # 層別買い目判定（確率ベース＝オッズ変動に左右されない）
+            bet_layer = None
+            recommended_bet = 0
+            if prob >= 0.60:  # 本命層: 60%以上はオッズ関係なく買い
+                bet_layer = "honmei"
+                recommended_bet = 500
+            elif prob >= 0.40 and effective_place_odds >= 3.0:  # 穴馬層: 40-60%で高オッズ
+                bet_layer = "ana"
+                recommended_bet = 300
+
             predictions.append({
                 "rank": i + 1,
                 "number": horse_num,
@@ -932,7 +1050,9 @@ def predict(request: PredictRequest):
                 "place_odds_min": place_odds_min,
                 "place_odds_max": place_odds_max,
                 "expected_value": round(expected_value, 2),
-                "is_value": is_value
+                "is_value": is_value,
+                "bet_layer": bet_layer,
+                "recommended_bet": recommended_bet
             })
 
         results.append({
@@ -944,6 +1064,28 @@ def predict(request: PredictRequest):
             "predictions": predictions
         })
 
+    # 層別買い目サマリー作成
+    betting_picks = {
+        "honmei": [],  # 本命層（確率60%以上）
+        "ana": [],     # 穴馬層（確率40-60%でオッズ3倍以上）
+        "total_bet": 0
+    }
+    for race in results:
+        for pred in race["predictions"]:
+            if pred["bet_layer"]:
+                pick = {
+                    "race_id": race["id"],
+                    "race_name": race["name"],
+                    "race_time": race["time"],
+                    "number": pred["number"],
+                    "name": pred["name"],
+                    "prob": pred["prob"],
+                    "place_odds": pred["place_odds"],
+                    "recommended_bet": pred["recommended_bet"]
+                }
+                betting_picks[pred["bet_layer"]].append(pick)
+                betting_picks["total_bet"] += pred["recommended_bet"]
+
     return {
         "track": {
             "code": track_code,
@@ -951,7 +1093,8 @@ def predict(request: PredictRequest):
             "emoji": TRACKS[track_code]['emoji']
         },
         "date": request.date,
-        "races": results
+        "races": results,
+        "betting_picks": betting_picks
     }
 
 
@@ -1048,6 +1191,16 @@ def predict_single_race(request: SingleRaceRequest):
         expected_value = prob * effective_place_odds if effective_place_odds > 0 else 0
         is_value = expected_value > 1.0
 
+        # 層別買い目判定（確率ベース＝オッズ変動に左右されない）
+        bet_layer = None
+        recommended_bet = 0
+        if prob >= 0.60:  # 本命層: 60%以上はオッズ関係なく買い
+            bet_layer = "honmei"
+            recommended_bet = 500
+        elif prob >= 0.40 and effective_place_odds >= 3.0:  # 穴馬層: 40-60%で高オッズ
+            bet_layer = "ana"
+            recommended_bet = 300
+
         predictions.append({
             "rank": i + 1,
             "number": horse_num,
@@ -1061,7 +1214,9 @@ def predict_single_race(request: SingleRaceRequest):
             "place_odds_min": place_odds_min,
             "place_odds_max": place_odds_max,
             "expected_value": round(expected_value, 2),
-            "is_value": is_value
+            "is_value": is_value,
+            "bet_layer": bet_layer,
+            "recommended_bet": recommended_bet
         })
 
     # 予測ログを保存（誤答分析用）
@@ -1074,13 +1229,32 @@ def predict_single_race(request: SingleRaceRequest):
     }
     save_prediction_log(race_id, track_code, predictions, metadata)
 
+    # 層別買い目サマリー作成（単一レース用）
+    betting_picks = {
+        "honmei": [],  # 本命層（確率60%以上）
+        "ana": [],     # 穴馬層（確率40-60%でオッズ3倍以上）
+        "total_bet": 0
+    }
+    for pred in predictions:
+        if pred["bet_layer"]:
+            pick = {
+                "number": pred["number"],
+                "name": pred["name"],
+                "prob": pred["prob"],
+                "place_odds": pred["place_odds"],
+                "recommended_bet": pred["recommended_bet"]
+            }
+            betting_picks[pred["bet_layer"]].append(pick)
+            betting_picks["total_bet"] += pred["recommended_bet"]
+
     return {
         "id": race_num,
         "name": race_name,
         "distance": distance,
         "time": start_time,
         "field_size": len(df),
-        "predictions": predictions
+        "predictions": predictions,
+        "betting_picks": betting_picks
     }
 
 
@@ -1092,15 +1266,12 @@ class OddsRequest(BaseModel):
 
 
 def get_race_result(race_id: str) -> list:
-    """レース結果（着順）を取得"""
+    """レース結果（着順）を取得（スクレイピング対策済み）"""
     url = f"https://nar.netkeiba.com/race/result.html?race_id={race_id}"
     try:
-        time.sleep(0.2)
-        session = requests.Session()
-        session.headers.update({'User-Agent': 'Mozilla/5.0'})
-        r = session.get(url, timeout=10)
-        r.encoding = 'EUC-JP'
-        soup = BeautifulSoup(r.text, 'lxml')
+        soup = fetch_with_retry(url, encoding='EUC-JP', delay=0.2)
+        if not soup:
+            return []
 
         results = []
         table = soup.find('table', class_='RaceTable01')
@@ -1324,14 +1495,12 @@ def get_all_models_info():
 # ========== 誤答分析API（SSE対応） ==========
 
 def analyze_get_race_result(race_id: str) -> list:
-    """レース結果（着順）を取得（分析用）"""
+    """レース結果（着順）を取得（分析用・スクレイピング対策済み）"""
     url = f"https://nar.netkeiba.com/race/result.html?race_id={race_id}"
     try:
-        session = requests.Session()
-        session.headers.update({'User-Agent': 'Mozilla/5.0'})
-        r = session.get(url, timeout=10)
-        r.encoding = 'EUC-JP'
-        soup = BeautifulSoup(r.text, 'lxml')
+        soup = fetch_with_retry(url, encoding='EUC-JP', delay=0.3)
+        if not soup:
+            return []
 
         results = []
         table = soup.find('table', class_='RaceTable01')

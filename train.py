@@ -29,6 +29,8 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import roc_auc_score
 import lightgbm as lgb
+import xgboost as xgb
+from imblearn.over_sampling import SMOTE
 
 # ========== 設定 ==========
 TRACKS = {
@@ -62,8 +64,13 @@ class NARScraper:
         self.delay = delay
         self.session = requests.Session()
         self.session.headers.update({'User-Agent': 'Mozilla/5.0'})
+        self.session.verify = False  # SSL証明書検証をスキップ
         self.horse_cache = {}
         self.jockey_cache = {}
+        self.pedigree_cache = {}
+        # SSL警告を抑制
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     def _fetch(self, url, encoding='EUC-JP'):
         time.sleep(self.delay)
@@ -313,6 +320,99 @@ class NARScraper:
             print(f"  騎手成績取得エラー ({jockey_id}): {e}")
             return {'jockey_win_rate': 0, 'jockey_place_rate': 0, 'jockey_show_rate': 0}
 
+    def get_pedigree_stats(self, horse_id: str):
+        """馬の血統（父馬・母父馬）の成績を取得"""
+        if horse_id in self.pedigree_cache:
+            return self.pedigree_cache[horse_id]
+
+        url = f"{self.DB_URL}/horse/{horse_id}/"
+        try:
+            soup = self._fetch(url)
+            pedigree = {
+                'father_win_rate': 0, 'father_show_rate': 0,
+                'bms_win_rate': 0, 'bms_show_rate': 0
+            }
+
+            # 血統テーブルを探す
+            pedigree_table = soup.find('table', class_='blood_table')
+            if not pedigree_table:
+                # 別のクラス名を試す
+                for table in soup.find_all('table'):
+                    if '血統' in str(table):
+                        pedigree_table = table
+                        break
+
+            if pedigree_table:
+                # 父馬（最初のリンク）
+                links = pedigree_table.find_all('a', href=re.compile(r'/horse/ped/'))
+                if links:
+                    # 父馬の産駒成績ページから勝率を取得
+                    father_link = links[0]
+                    father_id_match = re.search(r'/horse/ped/(\w+)', father_link['href'])
+                    if father_id_match:
+                        father_stats = self._get_sire_stats(father_id_match.group(1))
+                        pedigree['father_win_rate'] = father_stats.get('win_rate', 0)
+                        pedigree['father_show_rate'] = father_stats.get('show_rate', 0)
+
+                    # 母父馬（4番目のリンクが通常母父）
+                    if len(links) > 3:
+                        bms_link = links[3]
+                        bms_id_match = re.search(r'/horse/ped/(\w+)', bms_link['href'])
+                        if bms_id_match:
+                            bms_stats = self._get_sire_stats(bms_id_match.group(1))
+                            pedigree['bms_win_rate'] = bms_stats.get('win_rate', 0)
+                            pedigree['bms_show_rate'] = bms_stats.get('show_rate', 0)
+
+            self.pedigree_cache[horse_id] = pedigree
+            return pedigree
+        except Exception as e:
+            return {'father_win_rate': 0, 'father_show_rate': 0, 'bms_win_rate': 0, 'bms_show_rate': 0}
+
+    def _get_sire_stats(self, sire_id: str):
+        """種牡馬の産駒成績を取得"""
+        url = f"{self.DB_URL}/horse/sire/{sire_id}/"
+        try:
+            soup = self._fetch(url)
+            stats = {'win_rate': 0, 'show_rate': 0}
+
+            # 産駒成績テーブルを探す
+            for table in soup.find_all('table'):
+                rows = table.find_all('tr')
+                if not rows:
+                    continue
+
+                headers = [th.get_text(strip=True) for th in rows[0].find_all(['th', 'td'])]
+
+                # 勝率、複勝率の列を探す
+                win_idx = show_idx = -1
+                for i, h in enumerate(headers):
+                    if '複勝率' in h:
+                        show_idx = i
+                    elif '勝率' in h:
+                        win_idx = i
+
+                if win_idx >= 0:
+                    for row in rows[1:3]:
+                        cells = [c.get_text(strip=True) for c in row.find_all(['th', 'td'])]
+                        if len(cells) > max(win_idx, show_idx if show_idx >= 0 else win_idx):
+                            def parse_rate(text):
+                                m = re.search(r'(\d+\.?\d*)[％%]', text)
+                                return float(m.group(1)) / 100 if m else 0
+
+                            if win_idx < len(cells):
+                                stats['win_rate'] = parse_rate(cells[win_idx])
+                            if show_idx >= 0 and show_idx < len(cells):
+                                stats['show_rate'] = parse_rate(cells[show_idx])
+
+                            if stats['win_rate'] > 0:
+                                break
+                    if stats['win_rate'] > 0:
+                        break
+
+            return stats
+        except:
+            return {'win_rate': 0, 'show_rate': 0}
+
     def _calc_stats(self, ranks):
         if not ranks:
             return self._empty_stats()
@@ -343,7 +443,7 @@ class NARScraper:
             'last_race_date': None
         }
 
-    def enrich_with_history(self, df):
+    def enrich_with_history(self, df, include_pedigree=False):
         df = df.copy()
 
         if 'horse_id' in df.columns:
@@ -357,6 +457,18 @@ class NARScraper:
                 df['horse_id'] = df['horse_id'].astype(str)
                 hdf['horse_id'] = hdf['horse_id'].astype(str)
                 df = df.merge(hdf, on='horse_id', how='left')
+
+            # 血統データを取得
+            if include_pedigree:
+                pedigree_data = []
+                for hid in df['horse_id'].dropna().unique():
+                    pstats = self.get_pedigree_stats(str(hid))
+                    pstats['horse_id'] = hid
+                    pedigree_data.append(pstats)
+                if pedigree_data:
+                    pdf = pd.DataFrame(pedigree_data)
+                    pdf['horse_id'] = pdf['horse_id'].astype(str)
+                    df = df.merge(pdf, on='horse_id', how='left')
 
         if 'jockey_id' in df.columns:
             jockey_data = []
@@ -392,7 +504,22 @@ class Processor:
             'horse_win_rate_vs_field', 'jockey_win_rate_vs_field',
             'horse_avg_rank_vs_field',
             # 休養・調子
-            'days_since_last_race', 'rank_trend'
+            'days_since_last_race', 'rank_trend',
+            # === 新規追加: 交互作用特徴量 ===
+            'jockey_track_interaction',    # 騎手×競馬場の相性
+            'trainer_distance_interaction', # 調教師×距離の相性
+            'jockey_distance_interaction',  # 騎手×距離の相性
+            # === 新規追加: 時系列強化 ===
+            'win_streak',                  # 連勝数
+            'show_streak',                 # 複勝連続数
+            'recent_3_avg_rank',           # 直近3走平均着順
+            'recent_10_avg_rank',          # 直近10走平均着順
+            'rank_improvement',            # 着順改善トレンド
+            # === 新規追加: 血統特徴量 ===
+            'father_win_rate',             # 父馬の勝率
+            'father_show_rate',            # 父馬の複勝率
+            'bms_win_rate',                # 母父馬の勝率
+            'bms_show_rate',               # 母父馬の複勝率
         ]
 
     def process(self, df):
@@ -530,6 +657,69 @@ class Processor:
         else:
             df['rank_trend'] = 0
 
+        # === 交互作用特徴量 ===
+        # 騎手×競馬場の相性（ハッシュベース）
+        if 'jockey_id' in df.columns and 'race_id' in df.columns:
+            # 競馬場コード（race_idの5-6桁目）
+            df['track_code'] = df['race_id'].astype(str).str[4:6]
+            df['jockey_track_interaction'] = df.apply(
+                lambda x: hash(str(x.get('jockey_id', '')) + str(x.get('track_code', ''))) % 10000, axis=1
+            )
+        else:
+            df['jockey_track_interaction'] = 0
+
+        # 調教師×距離の相性
+        if 'trainer_id' in df.columns and 'distance' in df.columns:
+            # 距離カテゴリ（短/中/長）
+            df['distance_cat'] = df['distance'].apply(
+                lambda d: 'short' if pd.notna(d) and d < 1400 else ('long' if pd.notna(d) and d >= 1800 else 'mid')
+            )
+            df['trainer_distance_interaction'] = df.apply(
+                lambda x: hash(str(x.get('trainer_id', '')) + str(x.get('distance_cat', ''))) % 10000, axis=1
+            )
+        else:
+            df['trainer_distance_interaction'] = 0
+
+        # 騎手×距離の相性
+        if 'jockey_id' in df.columns and 'distance' in df.columns:
+            df['jockey_distance_interaction'] = df.apply(
+                lambda x: hash(str(x.get('jockey_id', '')) + str(x.get('distance_cat', ''))) % 10000, axis=1
+            )
+        else:
+            df['jockey_distance_interaction'] = 0
+
+        # === 時系列強化特徴量 ===
+        # 連勝数（CSVにあれば使用、なければ0）
+        if 'win_streak' not in df.columns:
+            df['win_streak'] = 0
+        if 'show_streak' not in df.columns:
+            df['show_streak'] = 0
+
+        # 直近3走・10走平均着順（CSVにあれば使用）
+        if 'recent_3_avg_rank' not in df.columns:
+            if 'horse_recent_avg_rank' in df.columns:
+                df['recent_3_avg_rank'] = df['horse_recent_avg_rank']  # 5走平均で代用
+            else:
+                df['recent_3_avg_rank'] = 10
+        if 'recent_10_avg_rank' not in df.columns:
+            if 'horse_avg_rank' in df.columns:
+                df['recent_10_avg_rank'] = df['horse_avg_rank']  # 全走平均で代用
+            else:
+                df['recent_10_avg_rank'] = 10
+
+        # 着順改善トレンド（直近3走と全体平均の差）
+        if 'recent_3_avg_rank' in df.columns and 'horse_avg_rank' in df.columns:
+            df['rank_improvement'] = df['horse_avg_rank'] - df['recent_3_avg_rank']
+            df['rank_improvement'] = df['rank_improvement'].fillna(0)
+        else:
+            df['rank_improvement'] = 0
+
+        # === 血統特徴量 ===
+        # CSVにあれば使用、なければ0
+        for col in ['father_win_rate', 'father_show_rate', 'bms_win_rate', 'bms_show_rate']:
+            if col not in df.columns:
+                df[col] = 0
+
         if 'rank' in df.columns:
             df['target'] = (df['rank'] <= 3).astype(int)
 
@@ -541,12 +731,24 @@ class Processor:
 
 
 # ========== 学習 ==========
-def train_model(df, features):
+def train_model(df, features, use_smote=True, use_ensemble=True):
     X, y = df[features].fillna(-1), df['target']
     X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
 
-    # Optuna最適化パラメータ (2025-12-31)
-    params = {
+    # === SMOTEでオーバーサンプリング ===
+    if use_smote:
+        try:
+            smote = SMOTE(random_state=42, k_neighbors=5)
+            X_tr_resampled, y_tr_resampled = smote.fit_resample(X_tr, y_tr)
+            print(f"  SMOTE適用: {len(y_tr)} -> {len(y_tr_resampled)}件")
+        except Exception as e:
+            print(f"  SMOTE失敗（スキップ）: {e}")
+            X_tr_resampled, y_tr_resampled = X_tr, y_tr
+    else:
+        X_tr_resampled, y_tr_resampled = X_tr, y_tr
+
+    # === LightGBM ===
+    lgb_params = {
         'objective': 'binary',
         'metric': 'auc',
         'verbose': -1,
@@ -559,14 +761,56 @@ def train_model(df, features):
         'bagging_fraction': 0.78,
         'bagging_freq': 3
     }
-    model = lgb.train(
-        params,
-        lgb.Dataset(X_tr, y_tr), 500, [lgb.Dataset(X_te, y_te)],
+    lgb_model = lgb.train(
+        lgb_params,
+        lgb.Dataset(X_tr_resampled, y_tr_resampled), 500, [lgb.Dataset(X_te, y_te)],
         callbacks=[lgb.early_stopping(50), lgb.log_evaluation(0)]
     )
+    lgb_pred = lgb_model.predict(X_te)
+    lgb_auc = roc_auc_score(y_te, lgb_pred)
+    print(f"  LightGBM AUC: {lgb_auc:.4f}")
 
-    auc = roc_auc_score(y_te, model.predict(X_te))
-    return model, features, auc
+    # === XGBoost ===
+    if use_ensemble:
+        xgb_params = {
+            'objective': 'binary:logistic',
+            'eval_metric': 'auc',
+            'max_depth': 6,
+            'learning_rate': 0.05,
+            'subsample': 0.8,
+            'colsample_bytree': 0.8,
+            'reg_alpha': 0.01,
+            'reg_lambda': 1.0,
+            'random_state': 42,
+            'verbosity': 0
+        }
+        xgb_model = xgb.XGBClassifier(**xgb_params, n_estimators=500, early_stopping_rounds=50)
+        xgb_model.fit(
+            X_tr_resampled, y_tr_resampled,
+            eval_set=[(X_te, y_te)],
+            verbose=False
+        )
+        xgb_pred = xgb_model.predict_proba(X_te)[:, 1]
+        xgb_auc = roc_auc_score(y_te, xgb_pred)
+        print(f"  XGBoost AUC: {xgb_auc:.4f}")
+
+        # === アンサンブル（平均） ===
+        ensemble_pred = (lgb_pred + xgb_pred) / 2
+        ensemble_auc = roc_auc_score(y_te, ensemble_pred)
+        print(f"  Ensemble AUC: {ensemble_auc:.4f}")
+
+        # 最もAUCが高いモデルを返す
+        if ensemble_auc >= max(lgb_auc, xgb_auc):
+            print("  -> Ensemble採用")
+            return {'lgb': lgb_model, 'xgb': xgb_model, 'type': 'ensemble'}, features, ensemble_auc
+        elif xgb_auc > lgb_auc:
+            print("  -> XGBoost採用")
+            return {'xgb': xgb_model, 'type': 'xgb'}, features, xgb_auc
+        else:
+            print("  -> LightGBM採用")
+            return lgb_model, features, lgb_auc
+    else:
+        return lgb_model, features, lgb_auc
 
 
 def save_model(model, features, path, metadata=None):
