@@ -58,24 +58,39 @@ TRACKS = {
 # モデルキャッシュ
 model_cache = {}
 
-# ========== 回収率ベース買い目設定 ==========
-# バックテスト結果から算出した、回収率100%達成に必要な最低複勝オッズ
-# 的中率から計算: 必要オッズ = 1 / 的中率
+# ========== v6選択的ベッティング設定 ==========
+# バックテスト結果: prob_diff >= 20% で100%超ROI達成
+# prob_diff = 予測1位の確率 - 予測2位の確率
+
+# 競馬場別の推奨フィルター設定
+SELECTIVE_BETTING_CONFIG = {
+    "44": {  # 大井
+        "min_prob_diff": 0.20,  # 確率差20%以上
+        "expected_roi": 1.057,  # 期待ROI 105.7%
+        "hit_rate": 0.596,      # 的中率 59.6%
+    },
+    "45": {  # 川崎
+        "min_prob_diff": 0.20,  # 確率差20%以上
+        "expected_roi": 1.147,  # 期待ROI 114.7%
+        "hit_rate": 0.649,      # 的中率 64.9%
+    },
+    # その他は保守的設定
+    "default": {
+        "min_prob_diff": 0.15,
+        "expected_roi": 1.0,
+        "hit_rate": 0.55,
+    }
+}
+
+def get_betting_config(track_code: str) -> dict:
+    """競馬場の選択的ベッティング設定を取得"""
+    return SELECTIVE_BETTING_CONFIG.get(track_code, SELECTIVE_BETTING_CONFIG["default"])
+
+# 旧設定との互換性（他の箇所で参照されている場合用）
 MIN_PLACE_ODDS_FOR_ROI = {
-    "44": 1.5,   # 大井: 複勝68.3% → 1/0.683 = 1.46 → 余裕見て1.5
-    "45": 1.8,   # 川崎: 複勝55.8% → 1/0.558 = 1.79 → 1.8
-    "43": 2.0,   # 船橋: データ不足、保守的に2.0
-    "42": 2.0,   # 浦和: データ不足、保守的に2.0
-    "30": 2.0,   # 門別
-    "35": 2.0,   # 盛岡
-    "36": 2.0,   # 水沢
-    "46": 2.0,   # 金沢
-    "47": 2.0,   # 笠松
-    "48": 2.0,   # 名古屋
-    "50": 2.0,   # 園田
-    "51": 2.0,   # 姫路
-    "54": 2.0,   # 高知
-    "55": 2.0,   # 佐賀
+    "44": 1.5, "45": 1.8, "43": 2.0, "42": 2.0, "30": 2.0,
+    "35": 2.0, "36": 2.0, "46": 2.0, "47": 2.0, "48": 2.0,
+    "50": 2.0, "51": 2.0, "54": 2.0, "55": 2.0,
 }
 
 # 賭け金計算（期待値に応じた可変金額）
@@ -1290,35 +1305,62 @@ def predict(request: PredictRequest):
             "predictions": predictions
         })
 
-    # ========== 回収率ベース買い目サマリー ==========
-    min_odds = MIN_PLACE_ODDS_FOR_ROI.get(track_code, 2.0)
+    # ========== v6選択的ベッティング ==========
+    config = get_betting_config(track_code)
+    min_prob_diff = config["min_prob_diff"]
+    expected_roi = config["expected_roi"]
+
     betting_picks = {
-        "roi_buy": [],   # 回収率100%+期待（予測1位 & オッズ条件クリア）
-        "watch": [],     # 様子見（予測1位だがオッズ不足）
+        "v6_buy": [],      # v6推奨買い（prob_diff条件クリア）
+        "watch": [],       # 様子見（prob_diff不足）
         "total_bet": 0,
-        "expected_return": 0,  # 期待リターン
-        "min_odds_required": min_odds,  # この競馬場の必要最低オッズ
-        "strategy": f"複勝オッズ{min_odds}倍以上のみ購入"
+        "expected_return": 0,
+        "strategy": f"確率差{int(min_prob_diff*100)}%以上で購入（期待ROI {expected_roi:.1%}）",
+        "min_prob_diff": min_prob_diff,
+        "expected_roi": expected_roi,
     }
+
     for race in results:
-        for pred in race["predictions"]:
-            if pred["bet_layer"] in ["roi_buy", "watch"]:
-                pick = {
-                    "race_id": race["id"],
-                    "race_name": race["name"],
-                    "race_time": race["time"],
-                    "number": pred["number"],
-                    "name": pred["name"],
-                    "prob": pred["prob"],
-                    "place_odds": pred["place_odds"],
-                    "expected_value": pred["expected_value"],
-                    "recommended_bet": pred["recommended_bet"],
-                    "reason": "オッズ条件クリア" if pred["bet_layer"] == "roi_buy" else f"オッズ{min_odds}倍未満"
-                }
-                betting_picks[pred["bet_layer"]].append(pick)
-                if pred["bet_layer"] == "roi_buy":
-                    betting_picks["total_bet"] += pred["recommended_bet"]
-                    betting_picks["expected_return"] += pred["recommended_bet"] * pred["expected_value"]
+        preds = race["predictions"]
+        if len(preds) < 2:
+            continue
+
+        # prob_diff計算（1位と2位の確率差）
+        prob_diff = preds[0]["prob"] - preds[1]["prob"]
+        top_pred = preds[0]
+
+        # v6フィルター: prob_diff >= 閾値
+        if prob_diff >= min_prob_diff:
+            pick = {
+                "race_id": race["id"],
+                "race_name": race["name"],
+                "race_time": race["time"],
+                "number": top_pred["number"],
+                "name": top_pred["name"],
+                "prob": top_pred["prob"],
+                "prob_diff": round(prob_diff, 3),
+                "place_odds": top_pred["place_odds"],
+                "odds": top_pred["odds"],
+                "recommended_bet": 100,  # 固定100円
+                "confidence": "高" if prob_diff >= 0.25 else "中",
+            }
+            betting_picks["v6_buy"].append(pick)
+            betting_picks["total_bet"] += 100
+            # 期待リターン = 賭け金 × 期待ROI
+            betting_picks["expected_return"] += 100 * expected_roi
+        else:
+            # prob_diff不足 → 様子見
+            pick = {
+                "race_id": race["id"],
+                "race_name": race["name"],
+                "race_time": race["time"],
+                "number": top_pred["number"],
+                "name": top_pred["name"],
+                "prob": top_pred["prob"],
+                "prob_diff": round(prob_diff, 3),
+                "reason": f"確率差{prob_diff:.1%} < {min_prob_diff:.0%}",
+            }
+            betting_picks["watch"].append(pick)
 
     return {
         "track": {
@@ -2103,6 +2145,335 @@ def get_analysis_report(date: str):
 
     with open(report_file, 'r', encoding='utf-8') as f:
         return json.load(f)
+
+
+# ========== 買い目表示HTML ==========
+from fastapi.responses import HTMLResponse
+
+@app.get("/betting/{track_code}/{date}", response_class=HTMLResponse)
+def show_betting_picks(track_code: str, date: str):
+    """買い目を見やすく表示するHTMLページ"""
+    from pydantic import BaseModel
+
+    class TempRequest(BaseModel):
+        track_code: str
+        date: str
+
+    # 予測を実行
+    try:
+        request = TempRequest(track_code=track_code, date=date)
+        result = predict(PredictRequest(track_code=track_code, date=date))
+    except Exception as e:
+        return f"<html><body><h1>エラー</h1><p>{str(e)}</p></body></html>"
+
+    track_info = result.get("track", {})
+    betting = result.get("betting_picks", {})
+    v6_buys = betting.get("v6_buy", [])
+    watches = betting.get("watch", [])
+
+    # HTML生成
+    html = f"""
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{track_info.get('emoji', '')} {track_info.get('name', '')} 買い目 - {date}</title>
+    <style>
+        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #eee;
+            min-height: 100vh;
+            padding: 20px;
+        }}
+        .container {{ max-width: 800px; margin: 0 auto; }}
+        h1 {{
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 1.8em;
+        }}
+        .strategy {{
+            text-align: center;
+            background: rgba(255,255,255,0.1);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }}
+        .strategy .roi {{ color: #4ade80; font-size: 1.2em; font-weight: bold; }}
+        .summary {{
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }}
+        .summary-item {{
+            background: rgba(255,255,255,0.1);
+            padding: 15px 25px;
+            border-radius: 10px;
+            text-align: center;
+        }}
+        .summary-item .value {{ font-size: 1.5em; font-weight: bold; color: #60a5fa; }}
+        .section {{ margin-bottom: 30px; }}
+        .section-title {{
+            font-size: 1.3em;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #4ade80;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }}
+        .section-title.watch {{ border-bottom-color: #fbbf24; }}
+        .pick-card {{
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 15px 20px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }}
+        .pick-card.buy {{
+            border-left: 4px solid #4ade80;
+            background: rgba(74, 222, 128, 0.1);
+        }}
+        .pick-card.watch {{
+            border-left: 4px solid #fbbf24;
+            background: rgba(251, 191, 36, 0.1);
+        }}
+        .race-info {{
+            font-size: 0.9em;
+            color: #9ca3af;
+            min-width: 80px;
+        }}
+        .horse-info {{
+            flex: 1;
+            min-width: 150px;
+        }}
+        .horse-num {{
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            line-height: 30px;
+            text-align: center;
+            background: #3b82f6;
+            border-radius: 50%;
+            font-weight: bold;
+            margin-right: 10px;
+        }}
+        .horse-name {{ font-weight: bold; font-size: 1.1em; }}
+        .stats {{
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+        }}
+        .stat {{
+            text-align: center;
+            min-width: 60px;
+        }}
+        .stat-label {{ font-size: 0.75em; color: #9ca3af; }}
+        .stat-value {{ font-weight: bold; }}
+        .stat-value.high {{ color: #4ade80; }}
+        .stat-value.medium {{ color: #60a5fa; }}
+        .confidence {{
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: bold;
+        }}
+        .confidence.high {{ background: #4ade80; color: #000; }}
+        .confidence.medium {{ background: #60a5fa; color: #000; }}
+        .no-picks {{
+            text-align: center;
+            padding: 40px;
+            color: #9ca3af;
+            font-size: 1.1em;
+        }}
+        .footer {{
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px;
+            color: #6b7280;
+            font-size: 0.9em;
+        }}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>{track_info.get('emoji', '')} {track_info.get('name', '')} 買い目</h1>
+        <p style="text-align:center; color:#9ca3af; margin-bottom:20px;">{date}</p>
+
+        <div class="strategy">
+            <p>戦略: <span class="roi">{betting.get('strategy', '')}</span></p>
+        </div>
+
+        <div class="summary">
+            <div class="summary-item">
+                <div class="stat-label">推奨買い目</div>
+                <div class="value">{len(v6_buys)}R</div>
+            </div>
+            <div class="summary-item">
+                <div class="stat-label">合計賭け金</div>
+                <div class="value">¥{betting.get('total_bet', 0):,}</div>
+            </div>
+            <div class="summary-item">
+                <div class="stat-label">期待リターン</div>
+                <div class="value" style="color:#4ade80;">¥{int(betting.get('expected_return', 0)):,}</div>
+            </div>
+        </div>
+"""
+
+    # 買い目セクション
+    if v6_buys:
+        html += """
+        <div class="section">
+            <div class="section-title">🎯 買い目（複勝）</div>
+"""
+        for pick in v6_buys:
+            conf_class = "high" if pick.get("confidence") == "高" else "medium"
+            html += f"""
+            <div class="pick-card buy">
+                <div class="race-info">
+                    <div>{pick.get('race_id', '')}R</div>
+                    <div>{pick.get('race_time', '')}</div>
+                </div>
+                <div class="horse-info">
+                    <span class="horse-num">{pick.get('number', '')}</span>
+                    <span class="horse-name">{pick.get('name', '')}</span>
+                </div>
+                <div class="stats">
+                    <div class="stat">
+                        <div class="stat-label">AI確率</div>
+                        <div class="stat-value high">{pick.get('prob', 0):.1%}</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">確率差</div>
+                        <div class="stat-value medium">{pick.get('prob_diff', 0):.1%}</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">単勝</div>
+                        <div class="stat-value">{pick.get('odds', 0)}倍</div>
+                    </div>
+                </div>
+                <span class="confidence {conf_class}">{pick.get('confidence', '中')}</span>
+            </div>
+"""
+        html += "</div>"
+    else:
+        html += '<div class="no-picks">🤔 本日は推奨買い目がありません</div>'
+
+    # 様子見セクション
+    if watches:
+        html += """
+        <div class="section">
+            <div class="section-title watch">👀 様子見（確率差不足）</div>
+"""
+        for pick in watches[:5]:  # 最大5件
+            html += f"""
+            <div class="pick-card watch">
+                <div class="race-info">
+                    <div>{pick.get('race_id', '')}R</div>
+                    <div>{pick.get('race_time', '')}</div>
+                </div>
+                <div class="horse-info">
+                    <span class="horse-num">{pick.get('number', '')}</span>
+                    <span class="horse-name">{pick.get('name', '')}</span>
+                </div>
+                <div class="stats">
+                    <div class="stat">
+                        <div class="stat-label">AI確率</div>
+                        <div class="stat-value">{pick.get('prob', 0):.1%}</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">確率差</div>
+                        <div class="stat-value" style="color:#fbbf24;">{pick.get('prob_diff', 0):.1%}</div>
+                    </div>
+                </div>
+                <span style="color:#9ca3af; font-size:0.85em;">{pick.get('reason', '')}</span>
+            </div>
+"""
+        html += "</div>"
+
+    html += f"""
+        <div class="footer">
+            <p>v6 選択的ベッティング戦略</p>
+            <p>期待ROI: 大井105.7% / 川崎114.7%</p>
+        </div>
+    </div>
+</body>
+</html>
+"""
+    return HTMLResponse(content=html)
+
+
+@app.get("/betting", response_class=HTMLResponse)
+def betting_index():
+    """買い目トップページ"""
+    today = datetime.now().strftime("%Y-%m-%d")
+    html = f"""
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>競馬AI 買い目</title>
+    <style>
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #eee;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }}
+        h1 {{ margin-bottom: 30px; }}
+        .tracks {{
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 15px;
+            max-width: 600px;
+            width: 100%;
+        }}
+        a {{
+            display: block;
+            background: rgba(255,255,255,0.1);
+            padding: 20px;
+            border-radius: 12px;
+            text-decoration: none;
+            color: #fff;
+            text-align: center;
+            transition: all 0.3s;
+        }}
+        a:hover {{
+            background: rgba(255,255,255,0.2);
+            transform: translateY(-3px);
+        }}
+        .emoji {{ font-size: 2em; display: block; margin-bottom: 10px; }}
+    </style>
+</head>
+<body>
+    <h1>🏇 競馬AI 買い目</h1>
+    <p style="margin-bottom:20px; color:#9ca3af;">{today}</p>
+    <div class="tracks">
+"""
+    for code, info in TRACKS.items():
+        html += f'<a href="/betting/{code}/{today}"><span class="emoji">{info["emoji"]}</span>{info["name"]}</a>\n'
+
+    html += """
+    </div>
+</body>
+</html>
+"""
+    return HTMLResponse(content=html)
 
 
 if __name__ == "__main__":
