@@ -2,6 +2,33 @@
 
 ## 2025-12-31
 
+### 機能追加: CSV特徴量一括更新スクリプト
+**変更内容**:
+- `update_csv_features.py` を新規作成
+- 既存CSVの騎手成績と追加特徴量を一括更新
+
+**追加特徴量**:
+| 特徴量 | 説明 |
+|--------|------|
+| jockey_win_rate | 騎手勝率（netkeibaから取得） |
+| jockey_place_rate | 騎手連対率 |
+| jockey_show_rate | 騎手複勝率 |
+| horse_number_ratio | 馬番/出走頭数（内外位置） |
+| distance_category | 距離区分（0=短距離, 1=中距離, 2=長距離） |
+| last_rank_diff | 前走着順 - 平均着順 |
+| win_rate_rank | レース内での勝率順位 |
+| horse_position | 馬番位置（0=内, 1=中, 2=外） |
+
+**使い方**:
+```bash
+python update_csv_features.py 大井      # 大井のみ
+python update_csv_features.py --all    # 全競馬場
+```
+
+**注意**: 更新後にモデル再学習が必要
+
+---
+
 ### 修正: 騎手成績の取得ロジックを修正
 **問題**: 騎手の勝率・連対率・複勝率が全て0になっていた（特徴量重要度も0）
 **原因**:
