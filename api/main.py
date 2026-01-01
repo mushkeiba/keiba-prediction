@@ -1853,23 +1853,54 @@ def get_model_info(track_code: str):
     meta_path = model_path.replace('.pkl', '_meta.json')
     meta_file = BASE_DIR / meta_path
 
+    result = None
     if meta_file.exists():
         import json
         with open(meta_file, 'r', encoding='utf-8') as f:
-            return json.load(f)
+            result = json.load(f)
+    else:
+        # メタデータJSONがない場合、pklから読み込み試行
+        model_file = BASE_DIR / model_path
+        if model_file.exists():
+            try:
+                with open(model_file, 'rb') as f:
+                    data = pickle.load(f)
+                if 'metadata' in data:
+                    result = data['metadata']
+            except:
+                pass
 
-    # メタデータJSONがない場合、pklから読み込み試行
-    model_file = BASE_DIR / model_path
-    if model_file.exists():
-        try:
-            with open(model_file, 'rb') as f:
-                data = pickle.load(f)
-            if 'metadata' in data:
-                return data['metadata']
-        except:
-            pass
+    if result is None:
+        raise HTTPException(status_code=404, detail="モデル情報がありません")
 
-    raise HTTPException(status_code=404, detail="モデル情報がありません")
+    # フロントエンドが期待するフィールドを追加
+    if 'data_count' not in result:
+        # CSVからデータ数を取得
+        track_name = TRACKS[track_code]['model'].split('_')[1].replace('.pkl', '')
+        csv_path = BASE_DIR / f'data/races_{track_name}.csv'
+        if csv_path.exists():
+            try:
+                df = pd.read_csv(csv_path)
+                result['data_count'] = len(df)
+                # 日付範囲を取得
+                if 'race_id' in df.columns:
+                    race_ids = df['race_id'].astype(str)
+                    dates = race_ids.str[0:4] + '-' + race_ids.str[6:8] + '-' + race_ids.str[8:10]
+                    result['date_range'] = {
+                        'from': dates.min(),
+                        'to': dates.max()
+                    }
+            except:
+                result['data_count'] = 0
+                result['date_range'] = {'from': 'N/A', 'to': 'N/A'}
+        else:
+            result['data_count'] = 0
+            result['date_range'] = {'from': 'N/A', 'to': 'N/A'}
+
+    if 'date_range' not in result:
+        result['date_range'] = {'from': 'N/A', 'to': 'N/A'}
+
+    return result
 
 
 @app.get("/api/models")
