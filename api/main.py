@@ -1013,8 +1013,8 @@ class Processor:
 
         # === Target Encoding（推論時はグローバル平均を使用）===
         # 訓練時に計算されたTarget Encodingは推論時には使えないため、
-        # グローバル平均（約0.08〜0.1程度）をデフォルト値として使用
-        global_te_default = 0.08  # 平均勝率に近い値
+        # グローバル平均（複勝率≒27%）をデフォルト値として使用
+        global_te_default = 0.274  # 学習データの複勝率平均
         df['jockey_id_te'] = global_te_default
         df['trainer_id_te'] = global_te_default
         df['horse_id_te'] = global_te_default
@@ -1104,34 +1104,35 @@ class Processor:
                 df[col] = 0
 
         # === v6追加特徴量（上がり3F関連）===
-        # 前走の上がり3F（リアルタイム予測では過去データがないのでデフォルト値）
+        # 学習データの統計に基づくデフォルト値を使用
+        # last_3f mean=41.2, std=2.0
         if 'prev_last_3f' not in df.columns:
-            df['prev_last_3f'] = 36.0  # 平均的な上がり3Fタイム（36秒）
+            df['prev_last_3f'] = 41.2  # 学習データ平均
 
         # 過去3走・5走の上がり3F平均
         if 'avg_last_3f_3races' not in df.columns:
-            df['avg_last_3f_3races'] = 36.0
+            df['avg_last_3f_3races'] = 41.2
         if 'avg_last_3f_5races' not in df.columns:
-            df['avg_last_3f_5races'] = 36.0
+            df['avg_last_3f_5races'] = 41.2
 
         # 前走の上がり3F順位（フィールド内での相対順位）
         if 'prev_last_3f_rank' not in df.columns:
-            df['prev_last_3f_rank'] = 5  # 中間順位
+            df['prev_last_3f_rank'] = 5.5  # 学習データ平均 5.54
 
         # 上がり3Fのフィールド平均との差
         if 'prev_last_3f_vs_field' not in df.columns:
-            df['prev_last_3f_vs_field'] = 0  # 平均との差なし
+            df['prev_last_3f_vs_field'] = 0  # 平均との差なし（正しい）
 
         # 過去着順の標準偏差（安定性指標）
         if 'past_rank_std' not in df.columns:
-            df['past_rank_std'] = 3.0  # 中程度のばらつき
+            df['past_rank_std'] = 2.66  # 学習データ平均
 
         # 初出走フラグ（出走回数が0または1なら初出走）
         if 'is_first_race' not in df.columns:
             if 'horse_runs' in df.columns:
                 df['is_first_race'] = (df['horse_runs'] <= 1).astype(int)
             else:
-                df['is_first_race'] = 0
+                df['is_first_race'] = 0  # 学習データでは20.2%が初出走
 
         for f in self.features:
             if f not in df.columns:
