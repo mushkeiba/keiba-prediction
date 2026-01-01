@@ -1,8 +1,9 @@
 {
   "track_name": "kawasaki",
-  "trained_at": "2026-01-01 02:12:27",
-  "auc": 0.6542,
-  "best_roi": 2.505,
-  "best_filter": "ProbDiff>=10%",
-  "version": "v6_selective_betting"
+  "trained_at": "2026-01-01 22:58:08",
+  "auc": 0.8739,
+  "hit_rate": 0.7766,
+  "roi": 1.5702,
+  "version": "auto_optimized",
+  "best_approach": "v3_LGB"
 }

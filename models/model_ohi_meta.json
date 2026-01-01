@@ -1,8 +1,9 @@
 {
   "track_name": "ohi",
-  "trained_at": "2026-01-01 02:04:27",
-  "auc": 0.6619,
-  "best_roi": 3.1282,
-  "best_filter": "All",
-  "version": "v6_selective_betting"
+  "trained_at": "2026-01-01 22:58:17",
+  "auc": 0.8335,
+  "hit_rate": 0.7251,
+  "roi": 0.7984,
+  "version": "auto_optimized",
+  "best_approach": "v3_LGB"
 }

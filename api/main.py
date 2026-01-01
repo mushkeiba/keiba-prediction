@@ -50,6 +50,63 @@ class TargetEncoderSafe:
         return df
 
 
+def create_features_v3(df):
+    """
+    v3特徴量作成（人気ベース - 的中率77%達成）
+    市場の知恵（オッズ）を活用したアプローチ
+    """
+    df = df.copy()
+
+    # 数値変換
+    num_cols = ['horse_win_rate', 'horse_show_rate', 'last_rank',
+                'jockey_win_rate', 'field_size', 'win_odds', 'last_3f']
+    for c in num_cols:
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors='coerce')
+
+    # 人気（最重要特徴量）
+    if 'win_odds' in df.columns:
+        df['popularity'] = df.groupby('race_id')['win_odds'].rank(ascending=True)
+        df['odds_implied_prob'] = 1 / df['win_odds'].clip(lower=1)
+    else:
+        df['popularity'] = 5
+        df['odds_implied_prob'] = 0.1
+
+    # 人気に対する実力の乖離
+    if 'horse_show_rate' in df.columns:
+        df['show_rate_rank'] = df.groupby('race_id')['horse_show_rate'].rank(ascending=False)
+        df['value_gap'] = df['show_rate_rank'] - df['popularity']
+    else:
+        df['value_gap'] = 0
+
+    # 上がり3F順位
+    if 'last_3f' in df.columns:
+        df['last_3f_rank'] = df.groupby('race_id')['last_3f'].rank(ascending=True)
+    else:
+        df['last_3f_rank'] = 5
+
+    # 特徴量リスト（v3モデルと同じ順序）
+    features = [
+        'popularity', 'odds_implied_prob', 'value_gap',
+        'horse_show_rate', 'jockey_win_rate', 'last_rank',
+        'last_3f_rank', 'field_size'
+    ]
+
+    # 欠損埋め
+    defaults = {
+        'popularity': 5, 'odds_implied_prob': 0.1, 'value_gap': 0,
+        'horse_show_rate': 0.27, 'jockey_win_rate': 0.1, 'last_rank': 5,
+        'last_3f_rank': 5, 'field_size': 11
+    }
+    for f in features:
+        if f in df.columns:
+            df[f] = df[f].fillna(defaults.get(f, 0))
+        else:
+            df[f] = defaults.get(f, 0)
+
+    return df, features
+
+
 # プロジェクトのルートディレクトリを取得
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -1264,7 +1321,7 @@ def load_model(track_code: str):
         return model_cache[track_code]
 
     if track_code not in TRACKS:
-        return None, None
+        return None, None, None, None
 
     model_name = TRACKS[track_code]['model']
 
@@ -1283,9 +1340,10 @@ def load_model(track_code: str):
             with open(model_path, 'rb') as f:
                 d = pickle.load(f)
             te_encoder = d.get('te_encoder')  # Target Encoder取得
-            model_cache[track_code] = (d['model'], d['features'], te_encoder)
-            return d['model'], d['features'], te_encoder
-    return None, None, None
+            version = d.get('version', 'legacy')  # モデルバージョン取得
+            model_cache[track_code] = (d['model'], d['features'], te_encoder, version)
+            return d['model'], d['features'], te_encoder, version
+    return None, None, None, None
 
 
 def predict_with_model(model, X):
@@ -1388,15 +1446,18 @@ def predict(request: PredictRequest):
         return cached_data
 
     # === JSONがない場合はスクレイピング ===
-    model, model_features, te_encoder = load_model(track_code)
+    model, model_features, te_encoder, model_version = load_model(track_code)
     if model is None:
         raise HTTPException(
             status_code=400,
             detail=f"{TRACKS[track_code]['name']}のモデルがありません"
         )
 
+    # モデルバージョンに応じた処理を選択
+    use_v3 = model_version == 'auto_optimized'
+
     scraper = NARScraper(track_code, delay=0.3)
-    processor = Processor(te_encoder=te_encoder)  # te_encoderを渡す
+    processor = Processor(te_encoder=te_encoder) if not use_v3 else None
 
     # レース一覧取得
     race_ids = scraper.get_race_list_by_date(date_str)
@@ -1410,15 +1471,27 @@ def predict(request: PredictRequest):
             continue
 
         df = scraper.enrich_data(df)
-        df = processor.process(df)
 
-        # オッズ取得（単勝・複勝を一括取得）
+        # オッズ取得（単勝・複勝を一括取得）- v3では特徴量に必要
         all_odds = scraper.get_all_odds(rid)
         win_odds_dict = all_odds.get('win', {})
         place_odds_dict = all_odds.get('place', {})
 
+        # オッズをDataFrameに追加（v3特徴量で必要）
+        if 'horse_number' in df.columns:
+            df['win_odds'] = df['horse_number'].apply(lambda x: win_odds_dict.get(int(x), 10) if pd.notna(x) else 10)
+
+        # 特徴量作成
+        if use_v3:
+            # v3: 人気ベースアプローチ（的中率77%）
+            df, features_to_use = create_features_v3(df)
+        else:
+            # 従来モデル
+            df = processor.process(df)
+            features_to_use = model_features
+
         # 予測
-        X = df[model_features].fillna(-1)
+        X = df[features_to_use].fillna(-1)
         df['prob'] = predict_with_model(model, X)
         df['pred_rank'] = df['prob'].rank(ascending=False, method='min').astype(int)
         df = df.sort_values('prob', ascending=False)
