@@ -658,22 +658,53 @@ class NARScraper:
             soup = BeautifulSoup(r.text, 'lxml')
 
             results = []
+            last_3f_times = []  # 上がり3Fタイム
+            race_dates = []  # レース日付
+
             for tr in soup.find_all('tr'):
                 tds = tr.find_all('td')
                 if len(tds) < 6:
                     continue
+
+                # 着順を取得（tds[3:7]のどこかに着順がある）
+                rank = None
                 for td in tds[3:7]:
                     t = td.get_text(strip=True)
                     if t.isdigit() and 1 <= int(t) <= 20:
-                        results.append(int(t))
+                        rank = int(t)
                         break
+
+                if rank is None:
+                    continue
+
+                results.append(rank)
+
+                # 日付を取得（最初のtd、YYYY/MM/DD形式）
+                if len(tds) > 0:
+                    date_text = tds[0].get_text(strip=True)
+                    date_match = re.search(r'(\d{4})/(\d{2})/(\d{2})', date_text)
+                    if date_match:
+                        race_dates.append(f"{date_match.group(1)}{date_match.group(2)}{date_match.group(3)}")
+
+                # 上がり3Fを取得（通常index 9-11あたり）
+                # テーブル構造: 日付,開催,R,レース名,映像,頭数,枠番,馬番,オッズ,人気,着順,着差,タイム,上がり...
+                for idx in [13, 12, 11, 10, 9]:  # 可能性のあるインデックスを試す
+                    if len(tds) > idx:
+                        l3f_text = tds[idx].get_text(strip=True)
+                        # 上がり3Fは30-50秒台（例: 38.5, 41.2）
+                        if re.match(r'^3[0-9]\.\d$|^4[0-9]\.\d$|^5[0-2]\.\d$', l3f_text):
+                            last_3f_times.append(float(l3f_text))
+                            break
+                else:
+                    last_3f_times.append(None)
+
                 if len(results) >= 20:
                     break
 
-            stats = self._calc_stats(results)
+            stats = self._calc_stats(results, last_3f_times, race_dates)
             self.horse_cache[horse_id] = stats
             return stats
-        except:
+        except Exception as e:
             return self._empty_stats()
 
     def get_jockey_stats(self, jockey_id: str):
@@ -732,7 +763,7 @@ class NARScraper:
         except:
             return {'jockey_win_rate': 0, 'jockey_place_rate': 0, 'jockey_show_rate': 0}
 
-    def _calc_stats(self, ranks):
+    def _calc_stats(self, ranks, last_3f_times=None, race_dates=None):
         if not ranks:
             return self._empty_stats()
         total = len(ranks)
@@ -741,6 +772,49 @@ class NARScraper:
         show = sum(1 for r in ranks if r <= 3)
         recent = ranks[:5]
         r_total = len(recent)
+
+        # 連勝数/連複勝数を計算（直近から数える）
+        win_streak = 0
+        for r in ranks:
+            if r == 1:
+                win_streak += 1
+            else:
+                break
+
+        show_streak = 0
+        for r in ranks:
+            if r <= 3:
+                show_streak += 1
+            else:
+                break
+
+        # 着順の標準偏差（安定性指標）
+        past_rank_std = np.std(ranks) if len(ranks) >= 2 else 3.0
+
+        # 上がり3F関連（デフォルト値: 学習データ平均）
+        prev_last_3f = 41.2
+        avg_last_3f_3races = 41.2
+        avg_last_3f_5races = 41.2
+
+        if last_3f_times:
+            # 有効な上がり3Fのみ抽出
+            valid_3f = [t for t in last_3f_times if t is not None]
+            if valid_3f:
+                prev_last_3f = valid_3f[0]  # 直近の上がり3F
+                avg_last_3f_3races = np.mean(valid_3f[:3]) if len(valid_3f) >= 1 else 41.2
+                avg_last_3f_5races = np.mean(valid_3f[:5]) if len(valid_3f) >= 1 else 41.2
+
+        # 前走からの日数計算
+        days_since_last_race = 30  # デフォルト値
+        if race_dates and len(race_dates) >= 1:
+            try:
+                from datetime import datetime
+                last_race_date = datetime.strptime(race_dates[0], '%Y%m%d')
+                today = datetime.now()
+                days_since_last_race = (today - last_race_date).days
+            except:
+                pass
+
         return {
             'horse_runs': total,
             'horse_win_rate': wins / total,
@@ -750,7 +824,14 @@ class NARScraper:
             'horse_recent_win_rate': sum(1 for r in recent if r == 1) / r_total if r_total else 0,
             'horse_recent_show_rate': sum(1 for r in recent if r <= 3) / r_total if r_total else 0,
             'horse_recent_avg_rank': np.mean(recent) if recent else 10,
-            'last_rank': ranks[0] if ranks else 10
+            'last_rank': ranks[0] if ranks else 10,
+            'win_streak': win_streak,
+            'show_streak': show_streak,
+            'past_rank_std': past_rank_std,
+            'prev_last_3f': prev_last_3f,
+            'avg_last_3f_3races': avg_last_3f_3races,
+            'avg_last_3f_5races': avg_last_3f_5races,
+            'days_since_last_race': days_since_last_race
         }
 
     def _empty_stats(self):
@@ -758,7 +839,10 @@ class NARScraper:
             'horse_runs': 0, 'horse_win_rate': 0, 'horse_place_rate': 0,
             'horse_show_rate': 0, 'horse_avg_rank': 10,
             'horse_recent_win_rate': 0, 'horse_recent_show_rate': 0,
-            'horse_recent_avg_rank': 10, 'last_rank': 10
+            'horse_recent_avg_rank': 10, 'last_rank': 10,
+            'win_streak': 0, 'show_streak': 0, 'past_rank_std': 3.0,
+            'prev_last_3f': 41.2, 'avg_last_3f_3races': 41.2, 'avg_last_3f_5races': 41.2,
+            'days_since_last_race': 30
         }
 
     def enrich_data(self, df):
@@ -791,7 +875,8 @@ class NARScraper:
 
 # ========== 前処理 ==========
 class Processor:
-    def __init__(self):
+    def __init__(self, te_encoder=None):
+        self.te_encoder = te_encoder  # Target Encoder（モデルから取得）
         # 新モデル（optimize_v2.py）対応: 52特徴量
         self.features = [
             # 基本特徴量
@@ -943,7 +1028,9 @@ class Processor:
             df['horse_avg_rank_vs_field'] = 0
 
         # === 休養日数 ===
-        df['days_since_last_race'] = 30  # デフォルト30日（リアルタイム予測では計算困難）
+        # スクレイピングしたデータを使用（enrich_dataでマージ済み、欠損はv6セクションで埋める）
+        if 'days_since_last_race' not in df.columns:
+            df['days_since_last_race'] = 30
 
         # === 着順トレンド ===
         if 'last_rank' in df.columns and 'horse_avg_rank' in df.columns:
@@ -1011,13 +1098,22 @@ class Processor:
         else:
             df['rank_improvement'] = 0
 
-        # === Target Encoding（推論時はグローバル平均を使用）===
-        # 訓練時に計算されたTarget Encodingは推論時には使えないため、
-        # グローバル平均（複勝率≒27%）をデフォルト値として使用
-        global_te_default = 0.274  # 学習データの複勝率平均
-        df['jockey_id_te'] = global_te_default
-        df['trainer_id_te'] = global_te_default
-        df['horse_id_te'] = global_te_default
+        # === Target Encoding ===
+        if self.te_encoder is not None:
+            # モデルのte_encoderを使用して実際のエンコーディングを適用
+            te_cols = ['jockey_id', 'trainer_id', 'horse_id']
+            for col in te_cols:
+                te_col = f'{col}_te'
+                if col in df.columns and col in self.te_encoder.mappings:
+                    df[te_col] = df[col].map(self.te_encoder.mappings[col]).fillna(self.te_encoder.global_mean)
+                else:
+                    df[te_col] = self.te_encoder.global_mean
+        else:
+            # te_encoderがない場合はグローバル平均を使用
+            global_te_default = 0.274  # 学習データの複勝率平均
+            df['jockey_id_te'] = global_te_default
+            df['trainer_id_te'] = global_te_default
+            df['horse_id_te'] = global_te_default
 
         # === 追加特徴量（AUC 0.8目標の最適化で追加）===
         # 馬×騎手シナジー
@@ -1104,35 +1200,54 @@ class Processor:
                 df[col] = 0
 
         # === v6追加特徴量（上がり3F関連）===
-        # 学習データの統計に基づくデフォルト値を使用
+        # スクレイピングしたデータを使用、欠損値はデフォルトで埋める
         # last_3f mean=41.2, std=2.0
         if 'prev_last_3f' not in df.columns:
-            df['prev_last_3f'] = 41.2  # 学習データ平均
+            df['prev_last_3f'] = 41.2
+        df['prev_last_3f'] = df['prev_last_3f'].fillna(41.2)
 
         # 過去3走・5走の上がり3F平均
         if 'avg_last_3f_3races' not in df.columns:
             df['avg_last_3f_3races'] = 41.2
+        df['avg_last_3f_3races'] = df['avg_last_3f_3races'].fillna(41.2)
+
         if 'avg_last_3f_5races' not in df.columns:
             df['avg_last_3f_5races'] = 41.2
+        df['avg_last_3f_5races'] = df['avg_last_3f_5races'].fillna(41.2)
 
-        # 前走の上がり3F順位（フィールド内での相対順位）
-        if 'prev_last_3f_rank' not in df.columns:
-            df['prev_last_3f_rank'] = 5.5  # 学習データ平均 5.54
+        # 前走からの日数（スクレイピングしたデータを使用）
+        if 'days_since_last_race' not in df.columns:
+            df['days_since_last_race'] = 30
+        df['days_since_last_race'] = df['days_since_last_race'].fillna(30)
 
-        # 上がり3Fのフィールド平均との差
-        if 'prev_last_3f_vs_field' not in df.columns:
-            df['prev_last_3f_vs_field'] = 0  # 平均との差なし（正しい）
+        # 前走の上がり3F順位（フィールド内での相対順位）- 実データから計算
+        if 'prev_last_3f' in df.columns:
+            df['prev_last_3f_rank'] = df.groupby(level=0, group_keys=False).apply(
+                lambda x: x['prev_last_3f'].rank(ascending=True)
+            ).reset_index(drop=True) if len(df) > 1 else 5.5
+        if 'prev_last_3f_rank' not in df.columns or df['prev_last_3f_rank'].isna().all():
+            df['prev_last_3f_rank'] = 5.5
+        df['prev_last_3f_rank'] = df['prev_last_3f_rank'].fillna(5.5)
+
+        # 上がり3Fのフィールド平均との差 - 実データから計算
+        if 'prev_last_3f' in df.columns and len(df) > 1:
+            field_mean = df['prev_last_3f'].mean()
+            df['prev_last_3f_vs_field'] = field_mean - df['prev_last_3f']  # 速いほど+
+        else:
+            df['prev_last_3f_vs_field'] = 0
+        df['prev_last_3f_vs_field'] = df['prev_last_3f_vs_field'].fillna(0)
 
         # 過去着順の標準偏差（安定性指標）
         if 'past_rank_std' not in df.columns:
-            df['past_rank_std'] = 2.66  # 学習データ平均
+            df['past_rank_std'] = 2.66
+        df['past_rank_std'] = df['past_rank_std'].fillna(2.66)
 
         # 初出走フラグ（出走回数が0または1なら初出走）
         if 'is_first_race' not in df.columns:
             if 'horse_runs' in df.columns:
                 df['is_first_race'] = (df['horse_runs'] <= 1).astype(int)
             else:
-                df['is_first_race'] = 0  # 学習データでは20.2%が初出走
+                df['is_first_race'] = 0
 
         for f in self.features:
             if f not in df.columns:
@@ -1167,9 +1282,10 @@ def load_model(track_code: str):
         if model_path.exists():
             with open(model_path, 'rb') as f:
                 d = pickle.load(f)
-            model_cache[track_code] = (d['model'], d['features'])
-            return d['model'], d['features']
-    return None, None
+            te_encoder = d.get('te_encoder')  # Target Encoder取得
+            model_cache[track_code] = (d['model'], d['features'], te_encoder)
+            return d['model'], d['features'], te_encoder
+    return None, None, None
 
 
 def predict_with_model(model, X):
@@ -1272,7 +1388,7 @@ def predict(request: PredictRequest):
         return cached_data
 
     # === JSONがない場合はスクレイピング ===
-    model, model_features = load_model(track_code)
+    model, model_features, te_encoder = load_model(track_code)
     if model is None:
         raise HTTPException(
             status_code=400,
@@ -1280,7 +1396,7 @@ def predict(request: PredictRequest):
         )
 
     scraper = NARScraper(track_code, delay=0.3)
-    processor = Processor()
+    processor = Processor(te_encoder=te_encoder)  # te_encoderを渡す
 
     # レース一覧取得
     race_ids = scraper.get_race_list_by_date(date_str)
@@ -1489,7 +1605,7 @@ def predict_single_race(request: SingleRaceRequest):
     if track_code not in TRACKS:
         raise HTTPException(status_code=400, detail="無効な競馬場コード")
 
-    model, model_features = load_model(track_code)
+    model, model_features, te_encoder = load_model(track_code)
     if model is None:
         raise HTTPException(
             status_code=400,
@@ -1497,7 +1613,7 @@ def predict_single_race(request: SingleRaceRequest):
         )
 
     scraper = NARScraper(track_code, delay=0.3)
-    processor = Processor()
+    processor = Processor(te_encoder=te_encoder)  # te_encoderを渡す
 
     df = scraper.get_race_data(race_id)
     if df is None:
