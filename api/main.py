@@ -1172,26 +1172,32 @@ def load_model(track_code: str):
 
 
 def predict_with_model(model, X):
-    """モデルで予測（アンサンブル対応）"""
+    """モデルで予測（アンサンブル対応）- 確率を返す"""
     if isinstance(model, dict):
         # アンサンブルモデルの場合
         model_type = model.get('type', 'ensemble')
         if model_type == 'ensemble':
-            lgb_pred = model['lgb'].predict(X)
-            xgb_pred = model['xgb'].predict(X)
+            # 分類器の場合はpredict_probaを使用（クラス1の確率）
+            lgb_pred = model['lgb'].predict_proba(X)[:, 1]
+            xgb_pred = model['xgb'].predict_proba(X)[:, 1]
             return (lgb_pred + xgb_pred) / 2
         elif model_type == 'xgb':
-            return model['xgb'].predict(X)
+            return model['xgb'].predict_proba(X)[:, 1]
         elif model_type == 'lgb':
-            return model['lgb'].predict(X)
+            return model['lgb'].predict_proba(X)[:, 1]
         else:
             # フォールバック: 最初に見つかったモデルを使用
             for key in ['lgb', 'xgb', 'model']:
                 if key in model:
-                    return model[key].predict(X)
+                    m = model[key]
+                    if hasattr(m, 'predict_proba'):
+                        return m.predict_proba(X)[:, 1]
+                    return m.predict(X)
             raise ValueError(f"Unknown model type: {model_type}")
     else:
         # 単一モデルの場合
+        if hasattr(model, 'predict_proba'):
+            return model.predict_proba(X)[:, 1]
         return model.predict(X)
 
 
