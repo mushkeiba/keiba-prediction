@@ -1,5 +1,44 @@
 # CHANGELOG
 
+## 2026-01-04
+
+### 機能追加: 川崎v10モデル（kawasaki_complete.csv使用）
+
+**問題**: 既存の川崎モデル（v8）は races_kawasaki.csv（25,138件、2023年〜）を使用しており、データ量が限られていた
+
+**変更内容**:
+
+1. **新データソース導入**
+   - `kawasaki_complete.csv`（42,457件、2021年〜）を使用
+   - データ量1.7倍、期間2年分追加
+
+2. **新モデル学習スクリプト作成**
+   - `train_kawasaki_complete.py`: 過去成績を自前で計算（データリークなし）
+   - 騎手IDが壊れていたため、騎手名ベースで統計計算
+
+3. **v10モデル結果**
+   - AUC: 0.7723
+   - 全レース: 的中率61.5%, 回収率92%
+   - フィルタ後（閾値0.15）: 的中率70.7%, **回収率106%**
+
+4. **API更新**（api/main.py）
+   - TRACKS設定を v10 モデルに更新
+   - メタデータに `model_name`, `version`, `data_source`, `deployed_at`, `feature_count` 追加
+
+5. **フロントエンド更新**（keiba-web/app/page.tsx）
+   - ModelInfo インターフェース拡張
+   - 表示追加: モデルバージョン、反映日時、期待ROI
+
+**変更ファイル**:
+- `data/kawasaki_complete.csv` (新規)
+- `train_kawasaki_complete.py` (新規)
+- `models/model_kawasaki_v10.pkl` (新規)
+- `models/model_kawasaki_v10_meta.json` (新規)
+- `api/main.py` (変更: L.256)
+- `keiba-web/app/page.tsx` (変更: L.60-76, L.1296-1319)
+
+---
+
 ## 2026-01-02
 
 ### 検証: 複勝3-5倍戦略の再検証（スクレイピング）

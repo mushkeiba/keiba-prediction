@@ -253,7 +253,7 @@ app.add_middleware(
 # v8モデル（オッズ除外・閾値フィルタリング対応）を優先使用
 TRACKS = {
     "44": {"name": "大井", "model": "models/model_ohi_v8.pkl", "emoji": "🏟️"},
-    "45": {"name": "川崎", "model": "models/model_kawasaki_v8.pkl", "emoji": "🌊"},
+    "45": {"name": "川崎", "model": "models/model_kawasaki_v10.pkl", "emoji": "🌊"},
     "43": {"name": "船橋", "model": "models/model_funabashi.pkl", "emoji": "⚓"},
     "42": {"name": "浦和", "model": "models/model_urawa.pkl", "emoji": "🌸"},
     "30": {"name": "門別", "model": "models/model_monbetsu.pkl", "emoji": "🐴"},
