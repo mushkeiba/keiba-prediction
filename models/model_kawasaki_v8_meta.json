@@ -1,0 +1,11 @@
+{
+  "track_name": "kawasaki",
+  "version": "v8_no_leak",
+  "trained_at": "2026-01-01 23:30:04",
+  "auc": 0.7978,
+  "best_threshold": 0.15,
+  "filtered_hit_rate": 0.7252,
+  "filtered_roi": 1.0789,
+  "all_hit_rate": 0.6433,
+  "all_roi": 0.9957
+}

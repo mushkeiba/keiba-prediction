@@ -1,0 +1,11 @@
+{
+  "track_name": "ohi",
+  "version": "v8_no_leak",
+  "trained_at": "2026-01-01 23:30:25",
+  "auc": 0.8011,
+  "best_threshold": 0.15,
+  "filtered_hit_rate": 0.7386,
+  "filtered_roi": 1.1014,
+  "all_hit_rate": 0.6381,
+  "all_roi": 1.0006
+}

@@ -107,6 +107,130 @@ def create_features_v3(df):
     return df, features
 
 
+def create_features_v8(df):
+    """
+    v8特徴量作成（オッズ除外 + 過去データのみ）
+    - 回収率108-110%達成
+    - データリークなし
+    """
+    df = df.copy()
+
+    # 数値変換
+    num_cols = [
+        'horse_runs', 'horse_win_rate', 'horse_show_rate', 'horse_avg_rank',
+        'horse_recent_win_rate', 'horse_recent_show_rate', 'horse_recent_avg_rank',
+        'last_rank', 'jockey_win_rate', 'jockey_show_rate',
+        'horse_number', 'bracket', 'age', 'weight_carried', 'distance',
+        'field_size', 'horse_weight', 'weight_change'
+    ]
+    for c in num_cols:
+        if c in df.columns:
+            df[c] = pd.to_numeric(df[c], errors='coerce')
+
+    # --- 過去スピード指数（推論時は過去データから計算済みの値を使用） ---
+    # 推論時はスクレイピングした過去成績から計算
+    if 'past_speed_index' not in df.columns:
+        df['past_speed_index'] = 50  # デフォルト
+    if 'past_3_speed_index' not in df.columns:
+        df['past_3_speed_index'] = 50
+
+    # --- 過去の上がり3F ---
+    if 'past_last_3f' not in df.columns:
+        df['past_last_3f'] = 40  # デフォルト
+    if 'past_3_last_3f' not in df.columns:
+        df['past_3_last_3f'] = 40
+
+    # --- 前走経過日数 ---
+    if 'days_since_last' not in df.columns:
+        df['days_since_last'] = 30  # デフォルト
+
+    # --- レース内での相対順位 ---
+    df['show_rate_rank'] = df.groupby('race_id')['horse_show_rate'].rank(ascending=False)
+    df['win_rate_rank'] = df.groupby('race_id')['horse_win_rate'].rank(ascending=False)
+    df['jockey_rank'] = df.groupby('race_id')['jockey_win_rate'].rank(ascending=False)
+    df['avg_rank_rank'] = df.groupby('race_id')['horse_avg_rank'].rank(ascending=True)
+    df['past_speed_rank'] = df.groupby('race_id')['past_speed_index'].rank(ascending=False)
+    df['past_3f_rank'] = df.groupby('race_id')['past_last_3f'].rank(ascending=True)
+
+    # --- レース内での相対値 ---
+    df['show_rate_vs_field'] = df['horse_show_rate'] - df.groupby('race_id')['horse_show_rate'].transform('mean')
+    df['win_rate_vs_field'] = df['horse_win_rate'] - df.groupby('race_id')['horse_win_rate'].transform('mean')
+    df['jockey_vs_field'] = df['jockey_win_rate'] - df.groupby('race_id')['jockey_win_rate'].transform('mean')
+    df['past_speed_vs_field'] = df['past_speed_index'] - df.groupby('race_id')['past_speed_index'].transform('mean')
+
+    # --- 経験値スコア ---
+    df['experience_score'] = np.log1p(df['horse_runs']) * df['horse_show_rate']
+
+    # --- 調子スコア ---
+    df['form_score'] = df['horse_recent_show_rate'].fillna(df['horse_show_rate'])
+    df['form_trend'] = df['form_score'] - df['horse_show_rate']
+
+    # --- 前走の成績 ---
+    df['last_rank_score'] = np.where(df['last_rank'] <= 3, 1, 0)
+    df['last_rank_normalized'] = df['last_rank'] / df['field_size'].clip(lower=1)
+
+    # --- 馬場 ---
+    condition_map = {'良': 0, '稍重': 1, '重': 2, '不良': 3}
+    if 'track_condition' in df.columns:
+        df['track_condition_code'] = df['track_condition'].map(condition_map).fillna(0)
+    else:
+        df['track_condition_code'] = 0
+
+    # --- 休み明け効果 ---
+    df['is_fresh'] = (df['days_since_last'] >= 30).astype(int)
+    df['is_long_rest'] = (df['days_since_last'] >= 60).astype(int)
+
+    # --- 特徴量リスト ---
+    features = [
+        # 相対順位
+        'show_rate_rank', 'win_rate_rank', 'jockey_rank', 'avg_rank_rank',
+        'past_speed_rank', 'past_3f_rank',
+        # 相対値
+        'show_rate_vs_field', 'win_rate_vs_field', 'jockey_vs_field',
+        'past_speed_vs_field',
+        # 実績
+        'horse_show_rate', 'horse_win_rate', 'horse_avg_rank',
+        'jockey_win_rate', 'jockey_show_rate',
+        # 経験・調子
+        'experience_score', 'form_score', 'form_trend', 'horse_runs',
+        # 前走
+        'last_rank', 'last_rank_score', 'last_rank_normalized',
+        # 過去のスピード・タイム
+        'past_speed_index', 'past_3_speed_index',
+        'past_last_3f', 'past_3_last_3f',
+        # 経過日数
+        'days_since_last', 'is_fresh', 'is_long_rest',
+        # その他
+        'field_size', 'age', 'horse_number', 'track_condition_code',
+        'weight_carried', 'horse_weight'
+    ]
+
+    # デフォルト値
+    defaults = {
+        'show_rate_rank': 5, 'win_rate_rank': 5, 'jockey_rank': 5, 'avg_rank_rank': 5,
+        'past_speed_rank': 5, 'past_3f_rank': 5,
+        'show_rate_vs_field': 0, 'win_rate_vs_field': 0, 'jockey_vs_field': 0,
+        'past_speed_vs_field': 0,
+        'horse_show_rate': 0.27, 'horse_win_rate': 0.1, 'horse_avg_rank': 5,
+        'jockey_win_rate': 0.1, 'jockey_show_rate': 0.27,
+        'experience_score': 0.5, 'form_score': 0.27, 'form_trend': 0, 'horse_runs': 10,
+        'last_rank': 5, 'last_rank_score': 0, 'last_rank_normalized': 0.5,
+        'past_speed_index': 50, 'past_3_speed_index': 50,
+        'past_last_3f': 40, 'past_3_last_3f': 40,
+        'days_since_last': 30, 'is_fresh': 0, 'is_long_rest': 0,
+        'field_size': 11, 'age': 4, 'horse_number': 5, 'track_condition_code': 0,
+        'weight_carried': 55, 'horse_weight': 470
+    }
+
+    for f in features:
+        if f in df.columns:
+            df[f] = df[f].fillna(defaults.get(f, 0))
+        else:
+            df[f] = defaults.get(f, 0)
+
+    return df, features
+
+
 # プロジェクトのルートディレクトリを取得
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -126,9 +250,10 @@ app.add_middleware(
 )
 
 # ========== 競馬場設定 ==========
+# v8モデル（オッズ除外・閾値フィルタリング対応）を優先使用
 TRACKS = {
-    "44": {"name": "大井", "model": "models/model_ohi.pkl", "emoji": "🏟️"},
-    "45": {"name": "川崎", "model": "models/model_kawasaki.pkl", "emoji": "🌊"},
+    "44": {"name": "大井", "model": "models/model_ohi_v8.pkl", "emoji": "🏟️"},
+    "45": {"name": "川崎", "model": "models/model_kawasaki_v8.pkl", "emoji": "🌊"},
     "43": {"name": "船橋", "model": "models/model_funabashi.pkl", "emoji": "⚓"},
     "42": {"name": "浦和", "model": "models/model_urawa.pkl", "emoji": "🌸"},
     "30": {"name": "門別", "model": "models/model_monbetsu.pkl", "emoji": "🐴"},
@@ -225,8 +350,10 @@ def save_prediction_log(race_id: str, track_code: str, predictions: list, metada
     except Exception as e:
         print(f"Failed to save prediction log: {e}")
 
-# 旧モデル名との互換性
+# 旧モデル名との互換性（v8モデルがなければ旧モデルにフォールバック）
 MODEL_ALIASES = {
+    "models/model_ohi_v8.pkl": ["models/model_ohi_v8.pkl", "models/model_ohi.pkl"],
+    "models/model_kawasaki_v8.pkl": ["models/model_kawasaki_v8.pkl", "models/model_kawasaki.pkl"],
     "models/model_ohi.pkl": ["models/model_ohi.pkl", "model_v2.pkl"],
 }
 
@@ -1317,11 +1444,15 @@ class Processor:
 
 # ========== モデル読み込み ==========
 def load_model(track_code: str):
+    """
+    モデルを読み込む
+    Returns: (model, features, te_encoder, version, best_threshold)
+    """
     if track_code in model_cache:
         return model_cache[track_code]
 
     if track_code not in TRACKS:
-        return None, None, None, None
+        return None, None, None, None, None
 
     model_name = TRACKS[track_code]['model']
 
@@ -1341,9 +1472,10 @@ def load_model(track_code: str):
                 d = pickle.load(f)
             te_encoder = d.get('te_encoder')  # Target Encoder取得
             version = d.get('version', 'legacy')  # モデルバージョン取得
-            model_cache[track_code] = (d['model'], d['features'], te_encoder, version)
-            return d['model'], d['features'], te_encoder, version
-    return None, None, None, None
+            best_threshold = d.get('best_threshold', 0.15)  # v8の閾値（デフォルト0.15）
+            model_cache[track_code] = (d['model'], d['features'], te_encoder, version, best_threshold)
+            return d['model'], d['features'], te_encoder, version, best_threshold
+    return None, None, None, None, None
 
 
 def predict_with_model(model, X):
@@ -1446,7 +1578,7 @@ def predict(request: PredictRequest):
         return cached_data
 
     # === JSONがない場合はスクレイピング ===
-    model, model_features, te_encoder, model_version = load_model(track_code)
+    model, model_features, te_encoder, model_version, best_threshold = load_model(track_code)
     if model is None:
         raise HTTPException(
             status_code=400,
@@ -1454,10 +1586,11 @@ def predict(request: PredictRequest):
         )
 
     # モデルバージョンに応じた処理を選択
+    use_v8 = model_version == 'v8_no_leak'
     use_v3 = model_version == 'auto_optimized'
 
     scraper = NARScraper(track_code, delay=0.3)
-    processor = Processor(te_encoder=te_encoder) if not use_v3 else None
+    processor = Processor(te_encoder=te_encoder) if not (use_v3 or use_v8) else None
 
     # レース一覧取得
     race_ids = scraper.get_race_list_by_date(date_str)
@@ -1482,7 +1615,10 @@ def predict(request: PredictRequest):
             df['win_odds'] = df['horse_number'].apply(lambda x: win_odds_dict.get(int(x), 10) if pd.notna(x) else 10)
 
         # 特徴量作成
-        if use_v3:
+        if use_v8:
+            # v8: オッズ除外アプローチ（回収率108-110%）
+            df, features_to_use = create_features_v8(df)
+        elif use_v3:
             # v3: 人気ベースアプローチ（的中率77%）
             df, features_to_use = create_features_v3(df)
         else:
@@ -1561,27 +1697,43 @@ def predict(request: PredictRequest):
                 "recommended_bet": recommended_bet
             })
 
+        # 信頼度指標（prob_gap）を計算
+        prob_gap = 0
+        if len(df) >= 2:
+            sorted_probs = df['prob'].sort_values(ascending=False).values
+            prob_gap = float(sorted_probs[0] - sorted_probs[1])
+
         results.append({
             "id": race_num,
             "name": race_name,
             "distance": distance,
             "time": start_time,
             "field_size": len(df),  # 出走頭数を追加
+            "prob_gap": round(prob_gap, 3),  # 1位と2位の確率差
             "predictions": predictions
         })
 
-    # ========== v6選択的ベッティング ==========
-    config = get_betting_config(track_code)
-    min_prob_diff = config["min_prob_diff"]
-    expected_roi = config["expected_roi"]
+    # ========== 選択的ベッティング ==========
+    # v8モデルの場合はbest_thresholdを使用、それ以外はv6設定を使用
+    if use_v8:
+        min_prob_diff = best_threshold
+        expected_roi = 1.08  # v8バックテスト結果: 108%
+        strategy_name = f"v8閾値フィルタ: 確率差{int(min_prob_diff*100)}%以上で購入（期待ROI {expected_roi:.0%}）"
+    else:
+        config = get_betting_config(track_code)
+        min_prob_diff = config["min_prob_diff"]
+        expected_roi = config["expected_roi"]
+        strategy_name = f"確率差{int(min_prob_diff*100)}%以上で購入（期待ROI {expected_roi:.1%}）"
 
     betting_picks = {
-        "roi_buy": [],     # 推奨買い（v6: prob_diff条件クリア）※フロントエンド互換
-        "v6_buy": [],      # 同じ内容（新キー名）
+        "roi_buy": [],     # 推奨買い（prob_diff条件クリア）※フロントエンド互換
+        "v6_buy": [],      # 同じ内容（旧キー名、互換性）
+        "v8_buy": [],      # v8用（新キー名）
         "watch": [],       # 様子見（prob_diff不足）
         "total_bet": 0,
         "expected_return": 0,
-        "strategy": f"確率差{int(min_prob_diff*100)}%以上で購入（期待ROI {expected_roi:.1%}）",
+        "strategy": strategy_name,
+        "model_version": model_version,
         "min_prob_diff": min_prob_diff,
         "expected_roi": expected_roi,
     }
@@ -1595,7 +1747,7 @@ def predict(request: PredictRequest):
         prob_diff = preds[0]["prob"] - preds[1]["prob"]
         top_pred = preds[0]
 
-        # v6フィルター: prob_diff >= 閾値
+        # フィルター: prob_diff >= 閾値
         if prob_diff >= min_prob_diff:
             pick = {
                 "race_id": race["id"],
@@ -1608,9 +1760,10 @@ def predict(request: PredictRequest):
                 "place_odds": top_pred["place_odds"],
                 "odds": top_pred["odds"],
                 "recommended_bet": 100,  # 固定100円
-                "confidence": "高" if prob_diff >= 0.25 else "中",
+                "confidence": "高" if prob_diff >= 0.25 else ("中" if prob_diff >= 0.15 else "低"),
             }
             betting_picks["v6_buy"].append(pick)
+            betting_picks["v8_buy"].append(pick)
             betting_picks["roi_buy"].append(pick)  # フロントエンド互換
             betting_picks["total_bet"] += 100
             # 期待リターン = 賭け金 × 期待ROI
@@ -1678,30 +1831,46 @@ def predict_single_race(request: SingleRaceRequest):
     if track_code not in TRACKS:
         raise HTTPException(status_code=400, detail="無効な競馬場コード")
 
-    model, model_features, te_encoder = load_model(track_code)
+    model, model_features, te_encoder, model_version, best_threshold = load_model(track_code)
     if model is None:
         raise HTTPException(
             status_code=400,
             detail=f"{TRACKS[track_code]['name']}のモデルがありません"
         )
 
+    # モデルバージョンに応じた処理を選択
+    use_v8 = model_version == 'v8_no_leak'
+    use_v3 = model_version == 'auto_optimized'
+
     scraper = NARScraper(track_code, delay=0.3)
-    processor = Processor(te_encoder=te_encoder)  # te_encoderを渡す
+    processor = Processor(te_encoder=te_encoder) if not (use_v3 or use_v8) else None
 
     df = scraper.get_race_data(race_id)
     if df is None:
         raise HTTPException(status_code=404, detail="レースデータが取得できません")
 
     df = scraper.enrich_data(df)
-    df = processor.process(df)
 
-    # オッズ取得（単勝・複勝を一括取得）
+    # オッズ取得（v3で必要）
     all_odds = scraper.get_all_odds(race_id)
     win_odds_dict = all_odds.get('win', {})
+    if 'horse_number' in df.columns:
+        df['win_odds'] = df['horse_number'].apply(lambda x: win_odds_dict.get(int(x), 10) if pd.notna(x) else 10)
+
+    # 特徴量作成
+    if use_v8:
+        df, features_to_use = create_features_v8(df)
+    elif use_v3:
+        df, features_to_use = create_features_v3(df)
+    else:
+        df = processor.process(df)
+        features_to_use = model_features
+
+    # 複勝オッズ取得
     place_odds_dict = all_odds.get('place', {})
 
     # 予測
-    X = df[model_features].fillna(-1)
+    X = df[features_to_use].fillna(-1)
     df['prob'] = predict_with_model(model, X)
     df['pred_rank'] = df['prob'].rank(ascending=False, method='min').astype(int)
     df = df.sort_values('prob', ascending=False)
