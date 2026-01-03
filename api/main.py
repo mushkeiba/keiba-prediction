@@ -253,7 +253,7 @@ app.add_middleware(
 # v8モデル（オッズ除外・閾値フィルタリング対応）を優先使用
 TRACKS = {
     "44": {"name": "大井", "model": "models/model_ohi_v8.pkl", "emoji": "🏟️"},
-    "45": {"name": "川崎", "model": "models/model_kawasaki_v8.pkl", "emoji": "🌊"},
+    "45": {"name": "川崎", "model": "models/model_kawasaki_v10.pkl", "emoji": "🌊"},
     "43": {"name": "船橋", "model": "models/model_funabashi.pkl", "emoji": "⚓"},
     "42": {"name": "浦和", "model": "models/model_urawa.pkl", "emoji": "🌸"},
     "30": {"name": "門別", "model": "models/model_monbetsu.pkl", "emoji": "🐴"},
@@ -1432,6 +1432,88 @@ class Processor:
                 df['is_first_race'] = (df['horse_runs'] <= 1).astype(int)
             else:
                 df['is_first_race'] = 0
+
+        # === v10モデル用特徴量 ===
+        # レース内相対順位
+        if 'horse_show_rate' in df.columns and 'race_id' in df.columns:
+            df['show_rate_rank'] = df.groupby('race_id')['horse_show_rate'].rank(ascending=False, method='min').fillna(6)
+        else:
+            df['show_rate_rank'] = 6
+
+        if 'jockey_win_rate' in df.columns and 'race_id' in df.columns:
+            df['jockey_rank'] = df.groupby('race_id')['jockey_win_rate'].rank(ascending=False, method='min').fillna(6)
+        else:
+            df['jockey_rank'] = 6
+
+        if 'horse_avg_rank' in df.columns and 'race_id' in df.columns:
+            df['avg_rank_rank'] = df.groupby('race_id')['horse_avg_rank'].rank(ascending=True, method='min').fillna(6)
+        else:
+            df['avg_rank_rank'] = 6
+
+        # 過去スピード指数（デフォルト50）
+        df['past_speed_index'] = 50
+        df['past_3_speed_index'] = 50
+        df['past_speed_rank'] = 6
+
+        # 過去上がり3F
+        if 'prev_last_3f' in df.columns:
+            df['past_last_3f'] = df['prev_last_3f'].fillna(40)
+            df['past_3_last_3f'] = df['avg_last_3f_3races'].fillna(40) if 'avg_last_3f_3races' in df.columns else 40
+            df['past_3f_rank'] = df.groupby('race_id')['past_last_3f'].rank(ascending=True, method='min').fillna(6) if 'race_id' in df.columns else 6
+        else:
+            df['past_last_3f'] = 40
+            df['past_3_last_3f'] = 40
+            df['past_3f_rank'] = 6
+
+        # 相対値
+        if 'horse_show_rate' in df.columns and 'race_id' in df.columns:
+            df['show_rate_vs_field'] = df['horse_show_rate'] - df.groupby('race_id')['horse_show_rate'].transform('mean')
+            df['show_rate_vs_field'] = df['show_rate_vs_field'].fillna(0)
+        else:
+            df['show_rate_vs_field'] = 0
+
+        # win_rate_vs_fieldはhorse_win_rate_vs_fieldからコピー
+        if 'horse_win_rate_vs_field' in df.columns:
+            df['win_rate_vs_field'] = df['horse_win_rate_vs_field']
+        else:
+            df['win_rate_vs_field'] = 0
+
+        if 'jockey_win_rate' in df.columns and 'race_id' in df.columns:
+            df['jockey_vs_field'] = df['jockey_win_rate'] - df.groupby('race_id')['jockey_win_rate'].transform('mean')
+            df['jockey_vs_field'] = df['jockey_vs_field'].fillna(0)
+        else:
+            df['jockey_vs_field'] = 0
+
+        df['past_speed_vs_field'] = 0  # デフォルト
+
+        # form_trend
+        if 'form_score' in df.columns and 'horse_show_rate' in df.columns:
+            df['form_trend'] = df['form_score'] - df['horse_show_rate']
+            df['form_trend'] = df['form_trend'].fillna(0)
+        else:
+            df['form_trend'] = 0
+
+        # 前走成績スコア
+        if 'last_rank' in df.columns:
+            df['last_rank_score'] = (df['last_rank'] <= 3).astype(int)
+            df['last_rank_normalized'] = df['last_rank'] / df['field_size'].clip(lower=1) if 'field_size' in df.columns else 0.5
+        else:
+            df['last_rank_score'] = 0
+            df['last_rank_normalized'] = 0.5
+
+        # 経過日数関連
+        if 'days_since_last_race' in df.columns:
+            df['days_since_last'] = df['days_since_last_race'].fillna(30).clip(0, 180)
+        else:
+            df['days_since_last'] = 30
+        df['is_fresh'] = (df['days_since_last'] >= 30).astype(int)
+        df['is_long_rest'] = (df['days_since_last'] >= 60).astype(int)
+
+        # track_condition_code (track_condition_encodedのエイリアス)
+        if 'track_condition_encoded' in df.columns:
+            df['track_condition_code'] = df['track_condition_encoded']
+        else:
+            df['track_condition_code'] = 0
 
         for f in self.features:
             if f not in df.columns:
